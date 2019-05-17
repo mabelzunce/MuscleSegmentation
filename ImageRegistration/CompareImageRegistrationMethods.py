@@ -9,33 +9,44 @@ import sys
 import os
 
 # Library path:
-libraryPath = "D:\Martin\Segmentation\AtlasLibrary\V0.5\Normalized\"
+libraryPath = "D:\\Martin\\Segmentation\\AtlasLibrary\\V0.5\\Normalized\\"
 # Look for the raw files:
-files = os.listdir()
+files = os.listdir(libraryPath)
 extensionImages = 'mhd'
 rawImagesNames = []
 for filename in files:
     name, extension = os.path.splitext(filename)
     if str(extension).endswith(extensionImages) and not str(name).endswith('labels'):
         rawImagesNames.append(name + '.' + extensionImages)
-
-print("List of files: ")
+print("Number of atlases: {0}".format(len(rawImagesNames)))
+print("List of files: {0}\n".format(rawImagesNames))
 
 # Concatenate the ND images into one (N+1)D image
-population = ['image1.hdr', ..., 'imageN.hdr']
-vectorOfImages = sitk.VectorOfImage()
 
-for filename in population:
-  vectorOfImages.push_back(sitk.ReadImage(filename))
+vectorOfImages = sitk.VectorOfImage()
+# Use only 5 images:
+#for filename in rawImagesNames:
+for i in range(0,4):
+    vectorOfImages.push_back(sitk.ReadImage(libraryPath + rawImagesNames[i]))
 
 image = sitk.JoinSeries(vectorOfImages)
 
 # Register
 elastixImageFilter = sitk.ElastixImageFilter()
+print(elastixImageFilter.GetOutputDirectory())
 elastixImageFilter.SetFixedImage(image)
 elastixImageFilter.SetMovingImage(image)
 elastixImageFilter.SetParameterMap(sitk.GetDefaultParameterMap('groupwise'))
 elastixImageFilter.Execute()
+
+
+# Get the images:
+resultImage = elastixImageFilter.GetResultImage()
+transformParameterMap = elastixImageFilter.GetTransformParameterMap()
+
+# Write image:
+sitk.WriteImage(resultImage, "averageImage.mhd")
+
 
 # fixed = sitk.ReadImage(sys.argv[1], sitk.sitkFloat32)
 # moving = sitk.ReadImage(sys.argv[2], sitk.sitkFloat32)
