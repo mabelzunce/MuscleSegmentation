@@ -2,6 +2,7 @@
 # Multi-atlas segmentation scheme trying to give a platform to do tests before translating them to the plugin.
 
 from __future__ import print_function
+from GetMetricFromElastixRegistration import GetFinalMetricFromElastixLogFile
 
 import SimpleITK as sitk
 import numpy as np
@@ -12,7 +13,7 @@ import os
 # Target image:
 targetImageFilename = 'D:\\Martin\\Segmentation\\AtlasLibrary\\V1.0\\NativeResolutionAndSize\\ID00001_bias.mhd'
 # Output path:
-outputPath = "D:\\MuscleSegmentationEvaluation\\RegistrationParameters\\"
+outputPath = "D:\\MuscleSegmentationEvaluation\\SegmentationWithPython\\"
 # Temp path:
 tempPath = outputPath + 'temp' + '\\'
 if not os.path.exists(outputPath):
@@ -30,9 +31,14 @@ paramFileBspline = 'Parameters_BSpline_NCC'
 
 # Library path:
 libraryPath = "D:\\Martin\\Segmentation\\AtlasLibrary\\V1.0\\Normalized\\"
+
+# Number of Atlases to select:
+numSelectedAtlases = 5
 ##########################################################################################
 
+############################## MULTI-ATLAS SEGMENTATION ##################################
 
+# REGISTRATION
 # Look for the raw files:
 files = os.listdir(libraryPath)
 extensionImages = 'mhd'
@@ -52,9 +58,15 @@ print("List of files: {0}\n".format(atlasImagesNames))
 
 # Read target image:
 fixedImage = sitk.ReadImage(targetImageFilename)
+#mask = sitk.Image(fixedImage.GetSize(), sitk.sitkUInt8, 1)
+mask = sitk.Greater(fixedImage,0)
+#mask = sitk.Image(fixedImage.GetSize(), sitk.sitkLabelUInt8, 1)
+#matrixForMask = np.ones(fixedImage.GetSize())
+
 nameFixed, extension = os.path.splitext(targetImageFilename)
 registeredImages = []
 transformParameterMaps = []
+similarityValue = []
 # Register to each atlas:
 for i in range(0, atlasImagesNames.__len__()):
     filenameAtlas = atlasImagesNames[i]
@@ -72,11 +84,36 @@ for i in range(0, atlasImagesNames.__len__()):
     elastixImageFilter.SetFixedImage(fixedImage)
     elastixImageFilter.SetMovingImage(movingImage)
     elastixImageFilter.SetParameterMap(parameterMapVector)
+    elastixImageFilter.LogToConsoleOff()
+    elastixImageFilter.LogToFileOn()
+    elastixImageFilter.SetOutputDirectory(tempPath)
+    #logFilename = 'reg_log_{0}'.format(i) + '.txt' # iT DOESN'T WORK WITH DIFFERENT LOG NAMES
+    logFilename = 'reg_log' + '.txt'
+    elastixImageFilter.SetLogFileName(logFilename)
     elastixImageFilter.Execute()
     # Get the images:
-    registeredImages[i] = elastixImageFilter.GetResultImage()
-    transformParameterMaps[i] = elastixImageFilter.GetTransformParameterMap()
+    registeredImages.append(elastixImageFilter.GetResultImage())
+    transformParameterMaps.append(elastixImageFilter.GetTransformParameterMap())
+    # Get the similarity value:
+    fullLogFilename = tempPath + logFilename
+
+    # Compute normalized cross correlation:
+    similarityValue.append(sitk.NormalizedCorrelation(registeredImages[i], mask, fixedImage))
+    #similarityValue.append(GetFinalMetricFromElastixLogFile(fullLogFilename))
+    print(similarityValue[i])
     # Write image:
     #outputFilename = outputPath + paramFiles + '\\' + nameFixed + '_' + nameMoving + '.mhd'
     #sitk.WriteImage(resultImage, outputFilename)
+    # Close image filter:
+    elastixImageFilter.RemoveOutputDirectory()
+    elastixImageFilter.RemoveLogFileName()
+    elastixImageFilter.__del__()
 
+    os.remove(fullLogFilename)
+
+print(similarityValue)
+
+# Atlas selection:
+
+
+# Atlas selection
