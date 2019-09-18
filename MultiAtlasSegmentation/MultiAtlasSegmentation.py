@@ -10,7 +10,7 @@ import sys
 import os
 
 ############################### CONFIGURATION #####################################
-DEBUG = 1 # In debug mode, all the intermediate iamges are written.
+DEBUG = 0 # In debug mode, all the intermediate iamges are written.
 USE_COSINES_AND_ORIGIN = 0
 
 ############################### TARGET IMAGE ######################################
