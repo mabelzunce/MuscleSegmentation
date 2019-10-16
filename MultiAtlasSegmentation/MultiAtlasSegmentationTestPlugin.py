@@ -2,6 +2,7 @@ from __future__ import print_function
 from GetMetricFromElastixRegistration import GetFinalMetricFromElastixLogFile
 from MultiAtlasSegmentation import MultiAtlasSegmentation
 from DixonTissueSegmentation import DixonTissueSegmentation
+from ApplyBiasCorrection import ApplyBiasCorrection
 import matplotlib.pyplot as plt
 import SimpleITK as sitk
 import numpy as np
@@ -31,13 +32,31 @@ for i in range(0,len(dixonTags)):
         # Reset the origin and direction to defaults.
         dixonImages[i].SetOrigin((0,0,0))
         dixonImages[i].SetDirection((1, 0, 0, 0, 1, 0, 0, 0, 1))
+############################### TARGET FOLDER AND IMAGE ###################################
+libraryVersion = 'V1.0'
+targetPath = 'D:\\Martin\\Segmentation\\AtlasLibrary\\' + libraryVersion + '\\NativeResolutionAndSize\\' #'D:\\Martin\\Segmentation\\AtlasLibrary\\V1.0\\NativeResolutionAndSize\\'
+# Look for the raw files in the library:
+files = os.listdir(targetPath)
+extensionImages = 'mhd'
+targetImageFilename = targetPath + caseName + '_bias.mhd'
+targetLabelsFilename = targetPath + caseName + '_labels.mhd'
+fixedImage = sitk.ReadImage(targetImageFilename)
+if not USE_COSINES_AND_ORIGIN:
+    # Reset the origin and direction to defaults.
+    fixedImage.SetOrigin((0,0,0))
+    fixedImage.SetDirection((1, 0, 0, 0, 1, 0, 0, 0, 1))
+path, filename = os.path.split(targetImageFilename)
+nameFixed, extension = os.path.splitext(filename)
+#nameCaseFixed = nameFixed
+index_dash = nameFixed.index('_')
+nameCaseFixed = nameFixed[:index_dash]
 
 ###################### OUTPUT #####################
 # Output path:
-outputBasePath = "D:\\MuscleSegmentationEvaluation\\SegmentationWithPython\\V1.0\\NonrigidNCC_N5_MaxProb_DixonMask\\"
+outputBasePath = 'D:\\MuscleSegmentationEvaluation\\SegmentationWithPython\\' + libraryVersion + '\\NonrigidNCC_N5_MaxProb_PluginTest\\'
 if not os.path.exists(outputBasePath):
     os.mkdir(outputBasePath)
-outputPath = outputBasePath + caseName + "\\"
+outputPath = outputBasePath + nameCaseFixed + "\\"
 if not os.path.exists(outputPath):
     os.mkdir(outputPath)
 
@@ -62,55 +81,41 @@ files = os.listdir(libraryPath)
 extensionImages = 'mhd'
 filesToMove = []
 for filename in files:
-    if filename.startswith(caseName):
+    if filename.startswith(nameCaseFixed):
         # Add to files to move:
         filesToMove.append(filename)
 # Move the files for the atlas to the backupfolder:
 for fileToMove in filesToMove:
     os.rename(libraryPath + fileToMove, backupFolder + fileToMove)
 
-########################################################################
-################ CALL MULTI ATLAS SEGMENTATION #########################
-# Target image in-phase:     dixonImages[0]
-# Apply bias correction filter:
-#inputImage = sitk.Shrink(fixedImage, [int(sys.argv[3])] * inputImage.GetDimension())
-#maskImage = sitk.Shrink(maskImage, [int(sys.argv[3])] * inputImage.GetDimension())
-#biasFilter = sitk.N4BiasFieldCorrectionImageFilter()
-#biasFilter.
-#fixedImage = sitk.N4BiasFieldCorrection(fixedImage)
-############################################
-
-# Soft tissue masL
-# 1)Not any restriction:
-#softTissueMask = sitk.Greater(dixonImages[0], 0)
-# 2) Dixon soft tissue:
-dixonSegmentedImage = DixonTissueSegmentation(dixonImages)
-softTissueMask = dixonSegmentedImage == 1 #sitk.Equal(dixonSegmentedImage,1)
-
-# Show dixon segmented image and the soft tissue mask:
-#plt.subplot(121)
-#z = int(dixonSegmentedImage.GetDepth() / 2)
-#plt.imshow(sitk.GetArrayViewFromImage(dixonSegmentedImage)[z, :, :], cmap=plt.cm.Greys_r)
-#plt.axis('off')
-#plt.title("Dixon Segmentation")
-#plt.subplot(122)
-#plt.imshow(sitk.GetArrayViewFromImage(softTissueMask)[z, :, :], cmap=plt.cm.Greys_r)
-#plt.axis('off')
-#plt.title("Soft Tissue Mask")
-#plt.show()
-
-########################################################################
-################ CALL MULTI ATLAS SEGMENTATION #########################
-# Call the multiatlas segmentation with the in phase image:
-dixonImages[0] = sitk.Cast(dixonImages[0], sitk.sitkFloat32)
-# Set the mask with the same properties as the target image:
-softTissueMask.SetSpacing(dixonImages[0].GetSpacing())
-softTissueMask.SetOrigin(dixonImages[0].GetOrigin())
-softTissueMask.SetDirection(dixonImages[0].GetDirection())
+############## 2) PRE-PROCESSING: BIAS CORRECTION AND SOFT-TISSUE MASK ###########################
+# Apply bias correction:
+shrinkFactor = (4,4,1)
+fixedImage = ApplyBiasCorrection(fixedImage, shrinkFactor)
+# Three type of masks:
+# a) Any voxel greater than 0:
+# softTissueMask = sitk.Equal(otsuImage, 1)
+# b) Otsu
+otsuImage = sitk.OtsuMultipleThresholds(fixedImage, 4, 0, 128, False) # 5 Classes, itk, doesn't coun't the background as a class, so we use 4 in the input parameters.
+#if DEBUG:
+#    sitk.WriteImage(otsuImage, outputPath + 'otsuMask.mhd')
+softTissueMask = sitk.Or(sitk.Equal(otsuImage, 1), sitk.Equal(otsuImage, 2))
+# Remove holes in it, using the background:
+vectorRadius = (2, 2, 2)
+kernel = sitk.sitkBall
+background = sitk.BinaryMorphologicalOpening(sitk.Equal(otsuImage, 0), vectorRadius, kernel)
+background = sitk.BinaryDilate(background, vectorRadius, kernel)
+softTissueMask = sitk.And(softTissueMask, sitk.Not(background))
 if DEBUG:
     sitk.WriteImage(softTissueMask, outputPath + 'softTissueMask.mhd')
-    sitk.WriteImage(dixonSegmentedImage, outputPath + 'dixonSegmentedImage.mhd')
-dictResults = MultiAtlasSegmentation(dixonImages[0], softTissueMask, libraryPath, outputPath, DEBUG)
+#   sitk.WriteImage(background, outputPath + 'background.mhd')
+# c) Dixon
+softTissueMask.SetSpacing(fixedImage.GetSpacing())
+softTissueMask.SetOrigin(fixedImage.GetOrigin())
+softTissueMask.SetDirection(fixedImage.GetDirection())
+
+################ 3) CALL MULTI ATLAS SEGMENTATION #########################
+MultiAtlasSegmentation(fixedImage, softTissueMask, libraryPath, outputPath, DEBUG)
 
 ########################################################################
 ##### MOVE BACK FILES

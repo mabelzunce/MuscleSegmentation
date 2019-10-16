@@ -14,7 +14,8 @@ DEBUG = 0 # In debug mode, all the intermediate iamges are written.
 USE_COSINES_AND_ORIGIN = 1
 
 ############################### TARGET FOLDER ###################################
-targetPath = "D:\\Martin\\Segmentation\\AtlasLibrary\\V1.0\\NativeResolutionAndSize\\"#""D:\\Martin\\Segmentation\\AtlasLibrary\\V1.0\\NativeResolutionAndSize\\"
+libraryVersion = 'V1.0'
+targetPath = 'D:\\Martin\\Segmentation\\AtlasLibrary\\' + libraryVersion + '\\NativeResolutionAndSize\\' #'D:\\Martin\\Segmentation\\AtlasLibrary\\V1.0\\NativeResolutionAndSize\\'
 # Look for the raw files in the library:
 files = os.listdir(targetPath)
 extensionImages = 'mhd'
@@ -35,7 +36,7 @@ print("List of files: {0}\n".format(targetImagesNames))
 
 ###################### OUTPUT #####################
 # Output path:
-baseOutputPath = "D:\\MuscleSegmentationEvaluation\\SegmentationWithPython\\LibraryV1.0_Test\\"
+baseOutputPath = 'D:\\MuscleSegmentationEvaluation\\SegmentationWithPython\\' + libraryVersion + '\\NonrigidNCCplus_N5_MaxProb_Mask\\'
 if not os.path.exists(baseOutputPath):
     os.mkdir(baseOutputPath)
 
@@ -77,7 +78,9 @@ for targetFilename in targetImagesNames:
     nameCaseFixed = nameFixed[:index_dash]
 
     # Output path:
-    outputPath = baseOutputPath + nameFixed + "\\"
+    outputPath = baseOutputPath + nameCaseFixed + "\\"
+    if not os.path.exists(outputPath):
+        os.mkdir(outputPath)
 
     # Apply bias correction filter:
     #inputImage = sitk.Shrink(fixedImage, [int(sys.argv[3])] * inputImage.GetDimension())
@@ -104,12 +107,29 @@ for targetFilename in targetImagesNames:
     for fileToMove in filesToMove:
         os.rename(libraryPath + fileToMove, backupFolder + fileToMove)
 
-    ########################################################################
-    ################ CALL MULTI ATLAS SEGMENTATION #########################
-    softTissueMask = sitk.Greater(fixedImage, 0)
+    ############## 2) SOFT-TISSUE MASK ###########################
+    # a) Any voxel greater than 0:
+    # softTissueMask = sitk.Equal(otsuImage, 1)
+    # b) Otsu
+    otsuImage = sitk.OtsuMultipleThresholds(fixedImage, 4, 0, 128, False) # 5 Classes, itk, doesn't coun't the background as a class, so we use 4 in the input parameters.
+    #if DEBUG:
+    #    sitk.WriteImage(otsuImage, outputPath + 'otsuMask.mhd')
+    softTissueMask = sitk.Or(sitk.Equal(otsuImage, 1), sitk.Equal(otsuImage, 2))
+    # Remove holes in it, using the background:
+    vectorRadius = (2, 2, 2)
+    kernel = sitk.sitkBall
+    background = sitk.BinaryMorphologicalOpening(sitk.Equal(otsuImage, 0), vectorRadius, kernel)
+    background = sitk.BinaryDilate(background, vectorRadius, kernel)
+    softTissueMask = sitk.And(softTissueMask, sitk.Not(background))
+    if DEBUG:
+        sitk.WriteImage(softTissueMask, outputPath + 'softTissueMask.mhd')
+    #   sitk.WriteImage(background, outputPath + 'background.mhd')
+    # c) Dixon
     softTissueMask.SetSpacing(fixedImage.GetSpacing())
     softTissueMask.SetOrigin(fixedImage.GetOrigin())
     softTissueMask.SetDirection(fixedImage.GetDirection())
+
+    ################ 3) CALL MULTI ATLAS SEGMENTATION #########################
     MultiAtlasSegmentation(fixedImage, softTissueMask, libraryPath, outputPath, DEBUG)
 
     ########################################################################

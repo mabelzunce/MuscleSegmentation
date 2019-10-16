@@ -15,9 +15,9 @@ def DixonTissueSegmentation(dixonImages):
     segmentedImage = sitk.Image(dixonImages[0].GetSize(), sitk.sitkUInt8)
     segmentedImage.SetSpacing(dixonImages[0].GetSpacing())
     segmentedImage.SetOrigin(dixonImages[0].GetOrigin())
+    segmentedImage.SetDirection(dixonImages[0].GetDirection())
 
     otsuOtuput = sitk.OtsuMultipleThresholds(dixonImages[0], 4, 0, 128, False)
-
     voxelsAir = sitk.Equal(otsuOtuput, 0)
     # Faster and simpler version but will depend on intensities:
     #voxelsAir = sitk.Less(dixonImages, 100)

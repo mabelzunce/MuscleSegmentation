@@ -25,8 +25,8 @@ def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath,
     ############################## MULTI-ATLAS SEGMENTATION PARAMETERS ######################
     # Parameter files:
     parameterFilesPath = 'D:\\Martin\\Segmentation\\Registration\\Elastix\\ParametersFile\\'
-    paramFileRigid = 'Parameters_Rigid'
-    paramFileBspline = 'Parameters_BSpline_NCC'
+    paramFileRigid = 'Parameters_Rigid_NCC'
+    paramFileBspline = 'Parameters_BSpline_NCC_1000iters_4096samples' #'Parameters_BSpline_NCC'
     #paramFilesToTest = {'Parameters_BSpline_NCC','Parameters_BSpline_NCC_1000iters', 'Parameters_BSpline_NCC_4096samples', 'Parameters_BSpline_NCC_1000iters_4096samples'}
 
     # Number of Atlases to select:
@@ -119,7 +119,7 @@ def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath,
     similarityValuesSorted = similarityValue[indicesSorted]
     log.write('Similarity metric values: {0}\n'.format(similarityValue))
     # Selected atlases:
-    indicesSelected = indicesSorted[0:numSelectedAtlases-1]
+    indicesSelected = indicesSorted[0:numSelectedAtlases]
     log.write('Indices of selected atlases: {0}\n'.format(indicesSelected))
     ############################################
 
@@ -153,17 +153,29 @@ def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath,
     outputLabelsSTAPLES = multilabelStaple.Execute(propagatedLabels)
     ##############################
 
+    ###################### 6) APPLY MASK ###############
+    outputLabelsMask = sitk.Multiply(outputLabels, softTissueMask)
+    outputLabelsSTAPLESmask = sitk.Multiply(outputLabelsSTAPLES, softTissueMask)
+
     ##################### 6) OUTPUT ############################
+    # Reset the origin and direction to defaults. As I'm doing that in the plugin.
+    #outputLabels.SetOrigin((0,0,0))
+    #outputLabels.SetDirection((1, 0, 0, 0, 1, 0, 0, 0, 1))
+    #outputLabelsSTAPLES.SetOrigin((0, 0, 0))
+    #outputLabelsSTAPLES.SetDirection((1, 0, 0, 0, 1, 0, 0, 0, 1))
+    #outputLabelsMask.SetOrigin((0, 0, 0))
+    #outputLabelsMask.SetDirection((1, 0, 0, 0, 1, 0, 0, 0, 1))
+    #outputLabelsSTAPLESmask.SetOrigin((0, 0, 0))
+    #outputLabelsSTAPLESmask.SetDirection((1, 0, 0, 0, 1, 0, 0, 0, 1))
     # Write output:
     sitk.WriteImage(outputLabels, outputPath + "segmentedImage.mhd")
     sitk.WriteImage(outputLabelsSTAPLES, outputPath + "segmentedImageSTAPLES.mhd")
-    dictResults = {'segmentedImage': outputLabels, 'segmentedImageSTAPLES': outputLabelsSTAPLES}
+    sitk.WriteImage(outputLabelsMask, outputPath + "segmentedImageMask.mhd")
+    sitk.WriteImage(outputLabelsSTAPLESmask, outputPath + "segmentedImageSTAPLESmask.mhd")
+    # Dictionary with results:
+    dictResults = {'segmentedImage': outputLabels, 'segmentedImageSTAPLES': outputLabelsSTAPLES,
+                   'segmentedImageMask': outputLabelsMask, 'segmentedImageSTAPLESmask': outputLabelsSTAPLESmask}
 
-    outputLabels = sitk.Multiply(outputLabels, softTissueMask)
-    outputLabelsSTAPLES = sitk.Multiply(outputLabelsSTAPLES, softTissueMask)
-    # Write output:
-    sitk.WriteImage(outputLabels, outputPath + "segmentedImageMask.mhd")
-    sitk.WriteImage(outputLabelsSTAPLES, outputPath + "segmentedImageSTAPLESmask.mhd")
     # Close log file:
     log.close()
 
