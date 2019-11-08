@@ -6,42 +6,50 @@ from GetMetricFromElastixRegistration import GetFinalMetricFromElastixLogFile
 from MultiAtlasSegmentation import MultiAtlasSegmentation
 from ApplyBiasCorrection import ApplyBiasCorrection
 import SimpleITK as sitk
+import SitkImageManipulation as sitkIm
+import winshell
 import numpy as np
 import sys
 import os
 
 ############################### CONFIGURATION #####################################
-DEBUG = 0 # In debug mode, all the intermediate iamges are written.
-USE_COSINES_AND_ORIGIN = 0
+DEBUG = 1 # In debug mode, all the intermediate iamges are written.
+USE_COSINES_AND_ORIGIN = 1
 
 ############################### TARGET FOLDER ###################################
-libraryVersion = 'V1.0'
-targetPath = 'D:\\Martin\\Segmentation\\AtlasLibrary\\' + libraryVersion + '\\NativeResolutionAndSize\\' #'D:\\Martin\\Segmentation\\AtlasLibrary\\V1.0\\NativeResolutionAndSize\\'
-# Look for the raw files in the library:
+# The target is the folder where the MRI images to be processed are. In the folder only
+# folders with the case name should be found. Inside each case folder there must be a subfolder
+# named "ForLibrary" with the dixon images called "case_I, case_O, case_W, case_F".
+targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\DixonFovOK\\'
+# Look for the folders or shortcuts:
 files = os.listdir(targetPath)
+# It can be lnk with shortcuts or folders:
+extensionShortcuts = 'lnk'
+strForShortcut = '-> '
 extensionImages = 'mhd'
+tagSequence = '_I'
 targetImagesNames = []
-targetLabelsNames = []
 for filename in files:
     name, extension = os.path.splitext(filename)
-#    # Use only the marathon study
-#    if str(name).startswith("ID"):
-    if str(extension).endswith(extensionImages) and not str(name).endswith('labels'):
+    # if name is a lnk, get the path:
+    if str(extension).endswith(extensionShortcuts):
+        # This is a shortcut:
+        shortcut = winshell.shortcut(targetPath + filename)
+        indexStart = shortcut.as_string().find(strForShortcut)
+        dataPath = shortcut.as_string()[indexStart+len(strForShortcut):] + '\\'
+    else:
+        dataPath = targetPath + filename
+    # Check if the images are available:
+    filename = dataPath + 'ForLibrary\\' + name + tagSequence + '.' + extensionImages
+    if os.path.exists(filename):
         # Intensity image:
-        targetImagesNames.append(name + '.' + extensionImages)
-        # Label image:
-        targetLabelsNames.append(name + '_labels.' + extensionImages)
+        targetImagesNames.append(filename)
 
 print("Number of target images: {0}".format(len(targetImagesNames)))
 print("List of files: {0}\n".format(targetImagesNames))
 
 ############################## MULTI-ATLAS SEGMENTATION PARAMETERS ######################
-# Parameter files:
-#parameterFilesPath = 'D:\\Martin\\Segmentation\\Registration\\Elastix\\ParametersFile\\'
-#paramFileRigid = 'Parameters_Rigid'
-#paramFileBspline = 'Parameters_BSpline_NCC'
-#paramFilesToTest = {'Parameters_BSpline_NCC','Parameters_BSpline_NCC_1000iters', 'Parameters_BSpline_NCC_4096samples', 'Parameters_BSpline_NCC_1000iters_4096samples'}
-
+libraryVersion = 'V1.0'
 # Library path:
 libraryPath = 'D:\\Martin\\Segmentation\\AtlasLibrary\\' + libraryVersion + '\\Normalized\\'
 
@@ -54,13 +62,12 @@ numLabels = 11 # 10 for muscles and bone, and 11 for undecided
 
 ###################### OUTPUT #####################
 # Output path:
-baseOutputPath = 'D:\\MuscleSegmentationEvaluation\\SegmentationWithPython\\' + libraryVersion + '\\NonrigidNCCplusplus_N{0}_MaxProb_Mask\\'.format(numberOfSelectedAtlases)
+baseOutputPath = 'D:\\MuscleSegmentationEvaluation\\SegmentationWithPython\\ForFatFractionPaper\\' + libraryVersion + '\\NonrigidNCCplusplus_N{0}_MaxProb_Mask\\'.format(numberOfSelectedAtlases)
 if not os.path.exists(baseOutputPath):
     os.makedirs(baseOutputPath)
 
 
-
-del targetImagesNames[0:6]
+del targetImagesNames[0:7]
 ##########################################################################################
 ################################### SEGMENT EACH IMAGE ###################################
 for targetFilename in targetImagesNames:
@@ -68,13 +75,14 @@ for targetFilename in targetImagesNames:
     ############################## MULTI-ATLAS SEGMENTATION ##################################
     ############## 0) TARGET IMAGE #############
     # Read target image:
-    targetImageFilename = targetPath + targetFilename
-    fixedImage = sitk.ReadImage(targetImageFilename)
+    fixedImage = sitk.ReadImage(targetFilename)
+    # Cast the image as float:
+    fixedImage = sitk.Cast(fixedImage, sitk.sitkFloat32)
     if not USE_COSINES_AND_ORIGIN:
         # Reset the origin and direction to defaults.
-        fixedImage.SetOrigin((0,0,0))
-        fixedImage.SetDirection((1, 0, 0, 0, 1, 0, 0, 0, 1))
-    path, filename = os.path.split(targetImageFilename)
+        sitkIm.ResetImageCoordinates(fixedImage)
+
+    path, filename = os.path.split(targetFilename)
     nameFixed, extension = os.path.splitext(filename)
     #nameCaseFixed = nameFixed
     index_dash = nameFixed.index('_')
@@ -86,7 +94,7 @@ for targetFilename in targetImagesNames:
         os.mkdir(outputPath)
 
     # Apply bias correction:
-    shrinkFactor = (4, 4, 2)
+    shrinkFactor = (2,2,1) # Having problems otherwise:
     fixedImage = ApplyBiasCorrection(fixedImage, shrinkFactor)
 
     ############# 1) ATLAS LIBRARY ##############################
@@ -124,9 +132,7 @@ for targetFilename in targetImagesNames:
         sitk.WriteImage(softTissueMask, outputPath + 'softTissueMask.mhd')
     #   sitk.WriteImage(background, outputPath + 'background.mhd')
     # c) Dixon
-    softTissueMask.SetSpacing(fixedImage.GetSpacing())
-    softTissueMask.SetOrigin(fixedImage.GetOrigin())
-    softTissueMask.SetDirection(fixedImage.GetDirection())
+    sitkIm.CopyImageProperties(softTissueMask, fixedImage)
 
     ################ 3) CALL MULTI ATLAS SEGMENTATION #########################
     MultiAtlasSegmentation(fixedImage, softTissueMask, libraryPath, outputPath, DEBUG, numSelectedAtlases=numberOfSelectedAtlases)

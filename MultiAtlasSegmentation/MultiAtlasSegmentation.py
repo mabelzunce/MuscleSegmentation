@@ -6,10 +6,14 @@ from GetMetricFromElastixRegistration import GetFinalMetricFromElastixLogFile
 
 import SimpleITK as sitk
 import numpy as np
+import SitkImageManipulation as sitkExtra
 import sys
 import os
 
-def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath, debug):
+# Optional parameters:
+#   - numSelectedAtlases: number of selected atlas after majority voting.
+#   - segmentationType: segmentation type that mainly defines the similarity metric NCC and MRI
+def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath, debug, numSelectedAtlases = 5, segmentationType = 'NCC'):
     ############################### CONFIGURATION #####################################
     # Temp path:
     tempPath = outputPath + 'temp' + '\\'
@@ -25,13 +29,16 @@ def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath,
     ############################## MULTI-ATLAS SEGMENTATION PARAMETERS ######################
     # Parameter files:
     parameterFilesPath = 'D:\\Martin\\Segmentation\\Registration\\Elastix\\ParametersFile\\'
-    paramFileRigid = 'Parameters_Rigid_NCC'
-    paramFileBspline = 'Parameters_BSpline_NCC_1000iters_4096samples' #'Parameters_BSpline_NCC'
+    if segmentationType == 'NCC':
+        paramFileRigid = 'Parameters_Rigid_NCC'
+        paramFileBspline = 'Parameters_BSpline_NCC_4000iters_8192samples'
+    elif segmentationType == 'NMI':
+        paramFileRigid = 'Parameters_Rigid_NMI'
+        paramFileBspline = 'Parameters_BSpline_NMI_4000iters_8192samples'
     #paramFilesToTest = {'Parameters_BSpline_NCC','Parameters_BSpline_NCC_1000iters', 'Parameters_BSpline_NCC_4096samples', 'Parameters_BSpline_NCC_1000iters_4096samples'}
 
-    # Number of Atlases to select:
-    numSelectedAtlases = 5
-
+    # Exponential gain to enhance smaller differences:
+    gain = 4
     # Labels:
     numLabels = 11 # 10 for muscles and bone, and 11 for undecided
     ##########################################################################################
@@ -68,6 +75,7 @@ def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath,
     registeredImages = []
     transformParameterMaps = []
     similarityValue = []
+    similarityValueElastix = []
     # Register to each atlas:
     for i in range(0, atlasImagesNames.__len__()):
         filenameAtlas = atlasImagesNames[i]
@@ -88,8 +96,8 @@ def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath,
         elastixImageFilter.LogToConsoleOff()
         elastixImageFilter.LogToFileOn()
         elastixImageFilter.SetOutputDirectory(tempPath)
-        logFilename = 'reg_log_{0}'.format(i) + '.txt' # iT DOESN'T WORK WITH DIFFERENT LOG NAMES
-        #logFilename = 'reg_log' + '.txt'
+        #logFilename = 'reg_log_{0}'.format(i) + '.txt' # iT DOESN'T WORK WITH DIFFERENT LOG NAMES
+        logFilename = 'reg_log' + '.txt'
         elastixImageFilter.SetLogFileName(logFilename)
         elastixImageFilter.Execute()
         # Get the images:
@@ -103,7 +111,7 @@ def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath,
         metricValue = imRegMethod.MetricEvaluate(targetImage, registeredImages[i])
         # metricValue = sitk.NormalizedCorrelation(registeredImages[i], mask, targetImage) # Is not working
         similarityValue.append(metricValue)
-        #similarityValue.append(GetFinalMetricFromElastixLogFile(fullLogFilename))
+        similarityValueElastix.append(GetFinalMetricFromElastixLogFile(fullLogFilename))
         print(similarityValue[i])
         # If debugging, write image:
         if debug:
@@ -117,7 +125,10 @@ def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath,
     similarityValue = np.asarray(similarityValue)
     indicesSorted = np.argsort(similarityValue)
     similarityValuesSorted = similarityValue[indicesSorted]
+    # Write similarity values, first with sitk and then with elastix that are included just for debugging purposes:
     log.write('Similarity metric values: {0}\n'.format(similarityValue))
+    log.write('Similarity metric values with exponential gain: {0}\n'.format(np.power(similarityValue,2)))
+    log.write('Similarity metric values from Elastix: {0}\n'.format(similarityValueElastix))
     # Selected atlases:
     indicesSelected = indicesSorted[0:numSelectedAtlases]
     log.write('Indices of selected atlases: {0}\n'.format(indicesSelected))

@@ -90,7 +90,7 @@ for fileToMove in filesToMove:
 
 ############## 2) PRE-PROCESSING: BIAS CORRECTION AND SOFT-TISSUE MASK ###########################
 # Apply bias correction:
-shrinkFactor = (4,4,1)
+shrinkFactor = (4,4,2)
 fixedImage = ApplyBiasCorrection(fixedImage, shrinkFactor)
 # Three type of masks:
 # a) Any voxel greater than 0:
