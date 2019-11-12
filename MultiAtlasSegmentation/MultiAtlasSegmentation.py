@@ -34,7 +34,7 @@ def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath,
         paramFileBspline = 'Parameters_BSpline_NCC_4000iters_8192samples'
     elif segmentationType == 'NMI':
         paramFileRigid = 'Parameters_Rigid_NMI'
-        paramFileBspline = 'Parameters_BSpline_NMI_4000iters_8192samples'
+        paramFileBspline = 'Parameters_BSpline_NMI_2000iters_4096samples'
     #paramFilesToTest = {'Parameters_BSpline_NCC','Parameters_BSpline_NCC_1000iters', 'Parameters_BSpline_NCC_4096samples', 'Parameters_BSpline_NCC_1000iters_4096samples'}
 
     # Exponential gain to enhance smaller differences:
@@ -93,9 +93,9 @@ def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath,
         elastixImageFilter.SetFixedImage(targetImage)
         elastixImageFilter.SetMovingImage(movingImage)
         elastixImageFilter.SetParameterMap(parameterMapVector)
-        elastixImageFilter.LogToConsoleOff()
         elastixImageFilter.LogToFileOn()
         elastixImageFilter.SetOutputDirectory(tempPath)
+        elastixImageFilter.LogToConsoleOff()
         #logFilename = 'reg_log_{0}'.format(i) + '.txt' # iT DOESN'T WORK WITH DIFFERENT LOG NAMES
         logFilename = 'reg_log' + '.txt'
         elastixImageFilter.SetLogFileName(logFilename)
@@ -143,6 +143,7 @@ def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath,
         nameMoving, extension = os.path.splitext(filenameAtlas)
         # Apply its transform:
         transformixImageFilter = sitk.TransformixImageFilter()
+        transformixImageFilter.LogToConsoleOff()
         transformixImageFilter.SetMovingImage(labelsImage)
         transformixImageFilter.SetTransformParameterMap(transformParameterMaps[indicesSelected[i]])
         transformixImageFilter.SetTransformParameter("FinalBSplineInterpolationOrder", "0")
