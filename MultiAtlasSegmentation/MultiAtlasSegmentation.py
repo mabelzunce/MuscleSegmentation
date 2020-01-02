@@ -31,10 +31,42 @@ def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath,
     parameterFilesPath = 'D:\\Martin\\Segmentation\\Registration\\Elastix\\ParametersFile\\'
     if segmentationType == 'NCC':
         paramFileRigid = 'Parameters_Rigid_NCC'
-        paramFileBspline = 'Parameters_BSpline_NCC_4000iters_8192samples'
+        paramFileBspline = 'Parameters_BSpline_NCC_2000iters_8192samples'
+    elif segmentationType == 'NCC_4000_2048':
+        paramFileRigid = 'Parameters_Rigid_NCC'
+        paramFileBspline = 'Parameters_BSpline_NCC_4000iters_2048samples'
+    elif segmentationType == 'NCC_2000_2048':
+        paramFileRigid = 'Parameters_Rigid_NCC'
+        paramFileBspline = 'Parameters_BSpline_NCC_2000iters_2048samples'
+    elif segmentationType == 'NCC_1000_2048':
+        paramFileRigid = 'Parameters_Rigid_NCC'
+        paramFileBspline = 'Parameters_BSpline_NCC_1000iters_2048samples'
+    elif segmentationType == 'NCC_500_2048':
+        paramFileRigid = 'Parameters_Rigid_NCC'
+        paramFileBspline = 'Parameters_BSpline_NCC_500iters_2048samples'
+    elif segmentationType == 'NCC_200_2048':
+        paramFileRigid = 'Parameters_Rigid_NCC'
+        paramFileBspline = 'Parameters_BSpline_NCC_200iters_2048samples'
     elif segmentationType == 'NMI':
         paramFileRigid = 'Parameters_Rigid_NMI'
         paramFileBspline = 'Parameters_BSpline_NMI_2000iters_4096samples'
+    elif segmentationType == 'NMI_200_2048':
+        paramFileRigid = 'Parameters_Rigid_NMI'
+        paramFileBspline = 'Parameters_BSpline_NMI_200iters_2048samples'
+    elif segmentationType == 'NMI_500_2048':
+        paramFileRigid = 'Parameters_Rigid_NMI'
+        paramFileBspline = 'Parameters_BSpline_NMI_500iters_2048samples'
+    elif segmentationType == 'NMI_1000_2048':
+        paramFileRigid = 'Parameters_Rigid_NMI'
+        paramFileBspline = 'Parameters_BSpline_NMI_1000iters_2048samples'
+    elif segmentationType == 'NMI_2000_2048':
+        paramFileRigid = 'Parameters_Rigid_NMI'
+        paramFileBspline = 'Parameters_BSpline_NMI_2000iters_2048samples'
+    elif segmentationType == 'NMI_4000_2048':
+        paramFileRigid = 'Parameters_Rigid_NMI'
+        paramFileBspline = 'Parameters_BSpline_NMI_4000iters_2048samples'
+    # Log registration parameters:
+    log.write("Registration parameter files: {0}, {1}\n".format(paramFileRigid, paramFileBspline))
     #paramFilesToTest = {'Parameters_BSpline_NCC','Parameters_BSpline_NCC_1000iters', 'Parameters_BSpline_NCC_4096samples', 'Parameters_BSpline_NCC_1000iters_4096samples'}
 
     # Exponential gain to enhance smaller differences:

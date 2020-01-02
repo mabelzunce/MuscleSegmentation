@@ -14,18 +14,18 @@ import os
 DEBUG = 0 # In debug mode, all the intermediate iamges are written.
 USE_COSINES_AND_ORIGIN = 1
 # Segmentation type:
-segType = 'NMI'#'NMI'
+segType = 'NCC_1000_2048'#'NMI'
 # Number of Atlases to select:
 numberOfSelectedAtlases = 5
 ############################### TARGET FOLDER ###################################
 libraryVersion = 'V1.0'
 targetPath = 'D:\\Martin\\Segmentation\\AtlasLibrary\\' + libraryVersion + '\\NativeResolutionAndSize\\' #'D:\\Martin\\Segmentation\\AtlasLibrary\\V1.0\\NativeResolutionAndSize\\'
-baseOutputPath = 'D:\\MuscleSegmentationEvaluation\\SegmentationWithPython\\' + libraryVersion + '\\TestWithEvaluationData\\Nonrigid{0}plus_N{1}_MaxProb_Mask\\'.format(segType, numberOfSelectedAtlases)
-targetPath = 'D:\\Martin\\Segmentation\\RawImagesForTesting\\SegmentedNotDixonFovOK_2019_11_08\\NoMetal\\'
-baseOutputPath = 'D:\\MuscleSegmentationEvaluation\\SegmentationWithPython\\' + libraryVersion + '\\TestWithEvaluationData\\Nonrigid{0}plus_N{1}_MaxProb_Mask\\'.format(segType, numberOfSelectedAtlases)
+baseOutputPath = 'D:\\MuscleSegmentationEvaluation\\SegmentationWithPython\\' + libraryVersion + '\\TestWithLibrary\\Nonrigid{0}_N{1}_MaxProb_Mask\\'.format(segType, numberOfSelectedAtlases)
+#targetPath = 'D:\\Martin\\Segmentation\\RawImagesForTesting\\SegmentedNotDixonFovOK_2019_11_08\\NoMetal\\'
+# #baseOutputPath = 'D:\\MuscleSegmentationEvaluation\\SegmentationWithPython\\' + libraryVersion + '\\TestWithEvaluationData\\Nonrigid{0}_N{1}_MaxProb_Mask\\'.format(segType, numberOfSelectedAtlases)
+targetPath = 'D:\\Martin\\Segmentation\\RawImagesForTesting\\DixonFovOK_2019_10_31\\'
+baseOutputPath = 'D:\\MuscleSegmentationEvaluation\\SegmentationWithPython\\' + libraryVersion + '\\DixonFovOK\\Nonrigid{0}_N{1}_MaxProb_Mask\\'.format(segType, numberOfSelectedAtlases)
 ###################### OUTPUT #####################
-# Output path:
-baseOutputPath = 'D:\\MuscleSegmentationEvaluation\\SegmentationWithPython\\' + libraryVersion + '\\TestWithEvaluationData\\Nonrigid{0}plus_N{1}_MaxProb_Mask\\'.format(segType, numberOfSelectedAtlases)
 if not os.path.exists(baseOutputPath):
     os.makedirs(baseOutputPath)
 
@@ -62,7 +62,7 @@ numLabels = 11 # 10 for muscles and bone, and 11 for undecided
 
 
 
-#del targetImagesNames[0:6]
+del targetImagesNames[0:12]
 ##########################################################################################
 ################################### SEGMENT EACH IMAGE ###################################
 for targetFilename in targetImagesNames:
@@ -81,8 +81,8 @@ for targetFilename in targetImagesNames:
     nameFixed, extension = os.path.splitext(filename)
     nameCaseFixed = nameFixed
     # If we want to remove sequence or other information from the name:
-    #index_dash = nameFixed.index('_')
-    #nameCaseFixed = nameFixed[:index_dash]
+    index_dash = nameFixed.index('_')
+    nameCaseFixed = nameFixed[:index_dash]
 
     # Output path:
     outputPath = baseOutputPath + nameCaseFixed + "\\"

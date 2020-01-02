@@ -46,3 +46,5 @@ outputFilename = outputPath + nameFixed + '_' + nameMoving + '.mhd'
 sitk.WriteImage(resultImage, outputFilename)
 outputFilename = outputPath + nameFixed + '.mhd'
 sitk.WriteImage(fixedImage, outputFilename)
+
+sitk.Hou
