@@ -19,12 +19,20 @@ segType = 'NCC_1000_2048'#'NMI'
 numberOfSelectedAtlases = 5
 ############################### TARGET FOLDER ###################################
 libraryVersion = 'V1.0'
-targetPath = 'D:\\Martin\\Segmentation\\AtlasLibrary\\' + libraryVersion + '\\NativeResolutionAndSize\\' #'D:\\Martin\\Segmentation\\AtlasLibrary\\V1.0\\NativeResolutionAndSize\\'
-baseOutputPath = 'D:\\MuscleSegmentationEvaluation\\SegmentationWithPython\\' + libraryVersion + '\\TestWithLibrary\\Nonrigid{0}_N{1}_MaxProb_Mask\\'.format(segType, numberOfSelectedAtlases)
+#targetPath = 'D:\\Martin\\Segmentation\\AtlasLibrary\\' + libraryVersion + '\\NativeResolutionAndSize\\' #'D:\\Martin\\Segmentation\\AtlasLibrary\\V1.0\\NativeResolutionAndSize\\'
+#baseOutputPath = 'D:\\MuscleSegmentationEvaluation\\SegmentationWithPython\\' + libraryVersion + '\\TestWithLibrary\\Nonrigid{0}_N{1}_MaxProb_Mask\\'.format(segType, numberOfSelectedAtlases)
 #targetPath = 'D:\\Martin\\Segmentation\\RawImagesForTesting\\SegmentedNotDixonFovOK_2019_11_08\\NoMetal\\'
 # #baseOutputPath = 'D:\\MuscleSegmentationEvaluation\\SegmentationWithPython\\' + libraryVersion + '\\TestWithEvaluationData\\Nonrigid{0}_N{1}_MaxProb_Mask\\'.format(segType, numberOfSelectedAtlases)
-targetPath = 'D:\\Martin\\Segmentation\\RawImagesForTesting\\DixonFovOK_2019_10_31\\'
-baseOutputPath = 'D:\\MuscleSegmentationEvaluation\\SegmentationWithPython\\' + libraryVersion + '\\DixonFovOK\\Nonrigid{0}_N{1}_MaxProb_Mask\\'.format(segType, numberOfSelectedAtlases)
+#targetPath = 'D:\\Martin\\Segmentation\\RawImagesForTesting\\DixonFovOK_2019_10_31\\'
+#baseOutputPath = 'D:\\MuscleSegmentationEvaluation\\SegmentationWithPython\\' + libraryVersion + '\\DixonFovOK\\Nonrigid{0}_N{1}_MaxProb_Mask\\'.format(segType, numberOfSelectedAtlases)
+#targetPath = 'D:\\Martin\\Segmentation\\RawImagesForTesting\\T1_2020_01_21\\'
+#baseOutputPath = 'D:\\MuscleSegmentationEvaluation\\SegmentationWithPython\\' + libraryVersion + '\\TestWithLibraryT1\\Nonrigid{0}_N{1}_MaxProb_Mask\\'.format(segType, numberOfSelectedAtlases)
+targetPath = 'D:\\Martin\\Segmentation\\RawImagesForTesting\\DixonMetal_2020_02_25\\T1Filled\\'
+baseOutputPath = 'D:\\MuscleSegmentationEvaluation\\SegmentationWithPython\\' + libraryVersion + '\\DixonMetal_2020_02_25\\T1Filled\\Nonrigid{0}_N{1}_MaxProb_Mask\\'.format(segType, numberOfSelectedAtlases)
+
+# Individual segmentation:
+#targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\MarathonStudy\\NotSegmented\\ID00061\\'
+#baseOutputPath = targetPath
 ###################### OUTPUT #####################
 if not os.path.exists(baseOutputPath):
     os.makedirs(baseOutputPath)
@@ -62,7 +70,7 @@ numLabels = 11 # 10 for muscles and bone, and 11 for undecided
 
 
 
-del targetImagesNames[0:12]
+#del targetImagesNames[0:13]
 ##########################################################################################
 ################################### SEGMENT EACH IMAGE ###################################
 for targetFilename in targetImagesNames:

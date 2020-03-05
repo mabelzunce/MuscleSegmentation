@@ -8,8 +8,8 @@ import sys
 import os
 
 #
-def LocalFusionWithLocalSimilarity(targetImage, registeredAtlases, outputPath, debug):
-    """" Fuses the labels from a set of registered atlases using local similarity metrics.
+def DynamicLabelFusionWithSimilarityWeights(targetImage, registeredAtlases, outputPath, debug):
+    """" Fuses the labels from a set of registered atlases using individual similarity metrics for each label.
 
     Arguments:
         targetImage: image being segmented:
@@ -22,21 +22,20 @@ def LocalFusionWithLocalSimilarity(targetImage, registeredAtlases, outputPath, d
     fusedLabels.SetOrigin(targetImage.GetOrigin())
     fusedLabels.SetDirection(targetImage.GetDirection())
 
-    # We need to evaluate the similarity between the target image and each atlas for each voxel.
-    # The atlas to be propagated depends on every voxel, so I need to go through them:
-    for i in range(0, targetImage.GetWidth()):
-        for j in range(0, targetImage.GetHeight()):
-            for k in range(0, targetImage.GetDepth()):
-                for atlas in registeredAtlases:
-                    LocalNormalizedCrossCorrelation(targetImage, registeredAtlases[""], i, j, k)
+    # Get similarity weights for each label mask for each atlas
+    for i in range(0, numLabels):
+        for j in range(0, registeredAtlases['image'].len()):
+            # Get the intensity image for the mask
+            RoiNormalizedCrossCorrelation(targetImage, registeredAtlases[""], i, j, k)
 
     return fusedLabels
 
 
-def LocalNormalizedCrossCorrelation(image1, image2, r, c, z, kernelRadius):
+def LocalNormalizedCrossCorrelation(image1, image2, roiMask):
     lncc = 0
-    patchImage1 = image1[r-kernelRadius:r+kernelRadius, c-kernelRadius:c+kernelRadius, z-kernelRadius:z+kernelRadius]
-    patchImage2 = image2[r - kernelRadius:r + kernelRadius, c - kernelRadius:c + kernelRadius,
-                  z - kernelRadius:z + kernelRadius]
+    # Mask each image:
+    image1_roi = sitk.Mask(image1, roiMask, 0)
+    image2_roi = sitk.Mask(image2, roiMask, 0)
+    # Get the normalized cross-correlation:
     lncc = np.cov(patchImage1, patchImage2)/(np.std(patchImage1)*np.std(patchImage2))
     return lncc
