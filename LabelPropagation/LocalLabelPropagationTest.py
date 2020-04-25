@@ -8,19 +8,19 @@ from LocalNormalizedCrossCorrelation import LocalNormalizedCrossCorrelation
 import numpy as np
 import sys
 import os
-
+from DynamicLabelFusionWithSimilarityWeights import DynamicLabelFusionWithSimilarityWeights as DynamicLabelling
 
 ############################### TARGET FOLDER ###################################
 # The target folder needs to have all the files that are saved by the plugin when intermediates files are saved.
-caseName = "ID00003"
+caseName = "ID00061"
 
-dataPath = "D:\\MuscleSegmentationEvaluation\\FullMuscles\\20192004\\V1.0\\NonrigidNCC_N5_MaxProb_Mask\\" \
+dataPath = "D:\MuscleSegmentationEvaluation\\SegmentationWithPython\\V1.2\\TestWithLibrary\\NonrigidNCC_1000_2048_N5_MaxProb_Mask\\" \
            + caseName + "\\"
-outputPath = "D:\\MuscleSegmentationEvaluation\\SegmentationWithPython\\LocalLabelPropagationTest\\" \
-             + caseName + "\\"
+outputPath = dataPath + "LabelPropagationTest\\"
 if not os.path.exists(outputPath):
     os.mkdir(outputPath)
 
+numLabels = 8;
 ############################### READ DATA ###################################
 # First read the target image:
 targetImage = sitk.ReadImage(dataPath + "input_registration.mhd")
@@ -28,30 +28,30 @@ extensionImages = 'mhd'
 
 # Look for the header files of the registered images:
 files = os.listdir(dataPath)
-extensionImages = 'mhd'
-regStartFilename = 'registered_atlas_'
-registeredFilenames = []
-# Keep only the relevant files:
-for filename in files:
-    if filename.startswith(regStartFilename) and filename.endswith(extensionImages):
-        registeredFilenames.append(filename)
+regImagesFilenameEnd = '_to_target.mhd'
+regLabelsFilenameEnd = '_to_target_labels.mhd'
 
-# Now read and process each image:
-registeredImages = []
-kernelRadius_voxels = [5, 5, 2]
-ndaTargetImage = sitk.GetArrayFromImage(targetImage)
+# Get the images and labels filenames:
+registeredFilenames = []
+registeredLabelsFilenames = []
+for filename in files:
+    if filename.endswith(regImagesFilenameEnd):
+        i = filename.find(regImagesFilenameEnd)
+        filenameLabels = filename[0:i] + regLabelsFilenameEnd
+        if os.path.isfile(dataPath + filenameLabels):
+            registeredFilenames.append(filename)
+            registeredLabelsFilenames.append(filenameLabels)
+
+# Need to create a dictionary with all the registered images (too much memory?):
+registeredImage = []
+labelsImage = []
 for i in range(0, len(registeredFilenames)):
     # Read image:
-    registeredImage = sitk.ReadImage(dataPath + registeredFilenames[i])
+    registeredImage.append(sitk.ReadImage(dataPath + registeredFilenames[i]))
     # Call the local similarity metric and save the image:
-    ndaRegisteredImage = sitk.GetArrayFromImage(registeredImage)
-    # Create a mask for the voxels to use, now all the voxels different to zero, but later I could use all the voxels
-    # were the label are different to 0.
-    ndaMask = ndaRegisteredImage > 80
-    ndaLncc = LocalNormalizedCrossCorrelation(ndaTargetImage, ndaRegisteredImage, kernelRadius_voxels, ndaMask)
-    imageLncc = sitk.GetImageFromArray(np.nan_to_num(ndaLncc))
-    imageLncc.SetDirection(targetImage.GetDirection())
-    imageLncc.SetSpacing(targetImage.GetSpacing())
-    imageLncc.SetOrigin(targetImage.GetOrigin())
-    sitk.WriteImage(imageLncc, outputPath + "LNCC_{0}.mhd".format(i))
+    labelsImage.append(sitk.ReadImage(dataPath + registeredLabelsFilenames[i]))
+
+registeredAtlases = {'image':registeredImage, 'labels': labelsImage}
+
+DynamicLabelling(targetImage, registeredAtlases, numLabels, outputPath=outputPath, debug = 1)
 
