@@ -8,8 +8,8 @@ from LocalNormalizedCrossCorrelation import LocalNormalizedCrossCorrelation
 import numpy as np
 import sys
 import os
+from DynamicLabelFusionWithSimilarityWeights import DynamicLabelFusionWithLocalSimilarityWeights as DynamicLocalLabelling
 from DynamicLabelFusionWithSimilarityWeights import DynamicLabelFusionWithSimilarityWeights as DynamicLabelling
-
 ############################### TARGET FOLDER ###################################
 # The target folder needs to have all the files that are saved by the plugin when intermediates files are saved.
 caseName = "ID00061"
@@ -53,5 +53,9 @@ for i in range(0, len(registeredFilenames)):
 
 registeredAtlases = {'image':registeredImage, 'labels': labelsImage}
 
-DynamicLabelling(targetImage, registeredAtlases, numLabels, outputPath=outputPath, debug = 1)
+fusedLabels = DynamicLocalLabelling(targetImage, registeredAtlases, numLabels, numSelectedAtlases = 5, outputPath=outputPath, debug = 1)
+sitk.WriteImage(fusedLabels, outputPath + "fused_labels.mhd")
 
+outputPath = outputPath + '\\Global\\'
+fusedLabels = DynamicLabelling(targetImage, registeredAtlases, numLabels, numSelectedAtlases = 5, useOnlyLabelVoxels = True, outputPath=outputPath, debug = 1)
+sitk.WriteImage(fusedLabels, outputPath + "fused_labels_only_label_voxels_ncc.mhd")
