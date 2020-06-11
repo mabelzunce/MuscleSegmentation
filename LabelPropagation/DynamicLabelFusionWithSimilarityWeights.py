@@ -4,7 +4,7 @@ from __future__ import print_function
 
 import SimpleITK as sitk
 import numpy as np
-
+import NormalizedCrossCorrelationMetrics as NCC
 import sys
 import os
 
@@ -12,7 +12,7 @@ sys.path.append('..\MultiAtlasSegmentation')
 import SitkImageManipulation as sitkIm
 
 def DynamicLabelFusionWithLocalSimilarityWeights(targetImage, registeredAtlases, numLabels, numSelectedAtlases = 5,
-                                                 expWeight=6, outputPath=".\\", debug = 0):
+                                                 expWeight=4, outputPath=".\\", debug = 0):
     """" Fuses the labels from a set of registered atlases using individual similarity metrics for each label.
 
     Arguments:
@@ -48,7 +48,7 @@ def DynamicLabelFusionWithLocalSimilarityWeights(targetImage, registeredAtlases,
             # Get the mask for this label and atlas:
             maskThisLabel = sitk.Equal(sitk.Cast(labelsImage, sitk.sitkUInt8), i) #i because we consider the background (0) as a label.
             # Compute directly the normalized correlation:
-            lncc = RoiNormalizedCrossCorrelationAsInITK(targetImage, intensityImage, maskThisLabel)
+            lncc = NCC.RoiNormalizedCrossCorrelationAsInITK(targetImage, intensityImage, maskThisLabel)
             lnccValues[i,j] = lncc
             if debug:
                 imRegMethod = sitk.ImageRegistrationMethod()
@@ -111,7 +111,7 @@ def DynamicLabelFusionWithLocalSimilarityWeights(targetImage, registeredAtlases,
     return fusedLabels
 
 def DynamicLabelFusionWithSimilarityWeights(targetImage, registeredAtlases, numLabels, numSelectedAtlases = 5,
-                                            expWeight = 6, useOnlyLabelVoxels = False, outputPath=".\\", debug = 0):
+                                            expWeight = 4, useOnlyLabelVoxels = False, outputPath=".\\", debug = 0):
     """" Fuses the labels from a set of registered atlases using the full atlas similarity.
 
     Arguments:
@@ -151,7 +151,7 @@ def DynamicLabelFusionWithSimilarityWeights(targetImage, registeredAtlases, numL
         # Get the mask for this label and atlas:
         maskThisLabel = sitk.GreaterEqual(sitk.Cast(labelsImage, sitk.sitkUInt8), minForMask) #I check the similarity only using the voxels with labels.
         # Compute directly the normalized correlation:
-        lncc = RoiNormalizedCrossCorrelationAsInITK(targetImage, intensityImage, maskThisLabel)
+        lncc = NCC.RoiNormalizedCrossCorrelationAsInITK(targetImage, intensityImage, maskThisLabel)
         lnccValues[i] = lncc
     # Sort indices for atlas selection and voting:
     indicesSorted = np.argsort(lnccValues)
@@ -223,55 +223,3 @@ def GetMajorityVotingFromProbMaps(probabilityMaps, useBackgroundAsLabel = True):
     labelsImage.CopyInformation(probabilityMaps[0])
     return labelsImage
 
-# Computes the normalzied cross correlation between two images in a given ROI.
-def RoiNormalizedCrossCorrelation(image1, image2, roiMask):
-    lncc = 0
-    # Mask each image:
-    image1_roi = sitk.Mask(image1, roiMask, 0)
-    image2_roi = sitk.Mask(image2, roiMask, 0)
-
-    # Instead of using StatisticsImageFilter, I use LabelStatisticsImageFilter as I need to compute the stats in the label.
-    labelStatisticFilter = sitk.LabelStatisticsImageFilter()
-    labelStatisticFilter.Execute(image1, roiMask)
-    meanRoi1 = labelStatisticFilter.GetMean(1)
-    stdDevRoi1 = labelStatisticFilter.GetSigma(1)
-    labelStatisticFilter.Execute(image2, roiMask)
-    meanRoi2 = labelStatisticFilter.GetMean(1)
-    stdDevRoi2 = labelStatisticFilter.GetSigma(1)
-
-    # Covariance between 1 and 2:
-    covImageRoi12 = sitk.Multiply(sitk.Subtract(image1_roi,meanRoi1), sitk.Subtract(image2_roi,meanRoi2))
-    # Get Sum
-    labelStatisticFilter.Execute(covImageRoi12, roiMask)
-    covRoi12 = labelStatisticFilter.GetMean(1)
-    # Get the normalized cross-correlation:
-    #lncc = covRoi12/(stdDevRoi1*stdDevRoi2)
-    lncc = np.divide(covRoi12 , stdDevRoi1 * stdDevRoi2, out=np.zeros_like(covRoi12),
-                     where=(stdDevRoi1 * stdDevRoi2) != 0)
-    return lncc
-
-# This functions is a simplified version similar to the normalized cross correlation metric in ITK
-# It has a negative value and is seauqe denominator and variances on denominator (see https://itk.org/Doxygen/html/classitk_1_1CorrelationImageToImageMetricv4.html)
-def RoiNormalizedCrossCorrelationAsInITK(image1, image2, roiMask):
-    lncc = 0
-    # Mask each image:
-    image1_roi = sitk.Mask(image1, roiMask, 0)
-    image2_roi = sitk.Mask(image2, roiMask, 0)
-
-    # Instead of using StatisticsImageFilter, I use LabelStatisticsImageFilter as I need to compute the stats in the label.
-    labelStatisticFilter = sitk.LabelStatisticsImageFilter()
-    labelStatisticFilter.Execute(image1, roiMask)
-    meanRoi1 = labelStatisticFilter.GetMean(1)
-    varRoi1 = labelStatisticFilter.GetVariance(1)
-    labelStatisticFilter.Execute(image2, roiMask)
-    meanRoi2 = labelStatisticFilter.GetMean(1)
-    varRoi2 = labelStatisticFilter.GetVariance(1)
-
-    # Covariance between 1 and 2:
-    covImageRoi12 = sitk.Multiply(sitk.Subtract(image1_roi,meanRoi1), sitk.Subtract(image2_roi,meanRoi2))
-    # Get Sum
-    labelStatisticFilter.Execute(covImageRoi12, roiMask)
-    covRoi12 = labelStatisticFilter.GetMean(1)
-    # Get the normalized cross-correlation:
-    lncc = np.divide(-covRoi12*covRoi12, varRoi1*varRoi2, out=np.zeros_like(covRoi12), where=(varRoi1*varRoi2) != 0)
-    return lncc

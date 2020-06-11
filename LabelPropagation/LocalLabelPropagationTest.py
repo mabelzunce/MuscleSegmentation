@@ -4,7 +4,6 @@
 from __future__ import print_function
 
 import SimpleITK as sitk
-from LocalNormalizedCrossCorrelation import LocalNormalizedCrossCorrelation
 import numpy as np
 import sys
 import os
