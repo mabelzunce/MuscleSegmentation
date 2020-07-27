@@ -9,11 +9,18 @@ import numpy as np
 import SitkImageManipulation as sitkExtra
 import sys
 import os
+import time
+sys.path.append('..\\LabelPropagation\\')
+import PostprocessingLabels as PP
+import MajorityVoting as MV
+import DixonTissueSegmentation as DixonTissueSeg
+from DynamicLabelFusionWithSimilarityWeights import DynamicLabelFusionWithLocalSimilarityWeights as LocalWeightingLabelling
+from DynamicLabelFusionWithSimilarityWeights import DynamicLabelFusionWithSimilarityWeights as GlobalWeightingLabelling
 
 # Optional parameters:
 #   - numSelectedAtlases: number of selected atlas after majority voting.
 #   - segmentationType: segmentation type that mainly defines the similarity metric NCC and MRI
-def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath, debug, numSelectedAtlases = 5, segmentationType = 'NCC'):
+def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath, debug, numSelectedAtlases = 5, paramFileBspline = 'NCC_2000_2048', maskedRegistration = True):
     ############################### CONFIGURATION #####################################
     # Temp path:
     tempPath = outputPath + 'temp' + '\\'
@@ -21,6 +28,7 @@ def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath,
         os.mkdir(outputPath)
     if not os.path.exists(tempPath):
         os.mkdir(tempPath)
+
     # Create a log file:
     logFilename = outputPath + 'log.txt'
     log = open(logFilename, 'w')
@@ -29,57 +37,35 @@ def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath,
     ############################## MULTI-ATLAS SEGMENTATION PARAMETERS ######################
     # Parameter files:
     parameterFilesPath = 'D:\\Martin\\Segmentation\\Registration\\Elastix\\ParametersFile\\'
-    if segmentationType == 'NCC':
-        paramFileRigid = 'Parameters_Rigid_NCC'
-        paramFileBspline = 'Parameters_BSpline_NCC_2000iters_8192samples'
-    elif segmentationType == 'NCC_4000_2048':
-        paramFileRigid = 'Parameters_Rigid_NCC'
-        paramFileBspline = 'Parameters_BSpline_NCC_4000iters_2048samples'
-    elif segmentationType == 'NCC_2000_2048':
-        paramFileRigid = 'Parameters_Rigid_NCC'
-        paramFileBspline = 'Parameters_BSpline_NCC_2000iters_2048samples'
-    elif segmentationType == 'NCC_1000_2048':
-        paramFileRigid = 'Parameters_Rigid_NCC'
-        paramFileBspline = 'Parameters_BSpline_NCC_1000iters_2048samples'
-    elif segmentationType == 'NCC_500_2048':
-        paramFileRigid = 'Parameters_Rigid_NCC'
-        paramFileBspline = 'Parameters_BSpline_NCC_500iters_2048samples'
-    elif segmentationType == 'NCC_200_2048':
-        paramFileRigid = 'Parameters_Rigid_NCC'
-        paramFileBspline = 'Parameters_BSpline_NCC_200iters_2048samples'
-    elif segmentationType == 'NMI':
-        paramFileRigid = 'Parameters_Rigid_NMI'
-        paramFileBspline = 'Parameters_BSpline_NMI_2000iters_4096samples'
-    elif segmentationType == 'NMI_200_2048':
-        paramFileRigid = 'Parameters_Rigid_NMI'
-        paramFileBspline = 'Parameters_BSpline_NMI_200iters_2048samples'
-    elif segmentationType == 'NMI_500_2048':
-        paramFileRigid = 'Parameters_Rigid_NMI'
-        paramFileBspline = 'Parameters_BSpline_NMI_500iters_2048samples'
-    elif segmentationType == 'NMI_1000_2048':
-        paramFileRigid = 'Parameters_Rigid_NMI'
-        paramFileBspline = 'Parameters_BSpline_NMI_1000iters_2048samples'
-    elif segmentationType == 'NMI_2000_2048':
-        paramFileRigid = 'Parameters_Rigid_NMI'
-        paramFileBspline = 'Parameters_BSpline_NMI_2000iters_2048samples'
-    elif segmentationType == 'NMI_4000_2048':
-        paramFileRigid = 'Parameters_Rigid_NMI'
-        paramFileBspline = 'Parameters_BSpline_NMI_4000iters_2048samples'
+    paramFileRigid = 'Parameters_Rigid_NMI'
+
     # Log registration parameters:
     log.write("Registration parameter files: {0}, {1}\n".format(paramFileRigid, paramFileBspline))
     #paramFilesToTest = {'Parameters_BSpline_NCC','Parameters_BSpline_NCC_1000iters', 'Parameters_BSpline_NCC_4096samples', 'Parameters_BSpline_NCC_1000iters_4096samples'}
 
     # Exponential gain to enhance smaller differences:
-    gain = 4
+    expWeight = 2
     # Labels:
     numLabels = 11 # 10 for muscles and bone, and 11 for undecided
     ##########################################################################################
+
+    ########## MASK FOR REGISTRATION ################
+    vectorRadius = (2, 2, 2)
+    kernel = sitk.sitkBall
+    if maskedRegistration:
+        otsuImage = sitk.OtsuMultipleThresholds(targetImage, 4, 0, 128,
+                                                False)  # 5 Classes, itk, doesn't coun't the background as a class, so we use 4 in the input parameters.
+        background = sitk.BinaryMorphologicalOpening(sitk.Equal(otsuImage, 0), vectorRadius, kernel)
+        background = sitk.BinaryDilate(background, vectorRadius, kernel)
+        maskTarget = sitk.Not(background)
 
     ############################## MULTI-ATLAS SEGMENTATION ##################################
     ############## 0) TARGET IMAGE #############
     # If debugging, write image:
     if debug:
-        sitk.WriteImage(targetImage, outputPath + "input_registration.mhd")
+        sitk.WriteImage(targetImage, outputPath + "input_registration.mhd", True)
+        if maskedRegistration:
+            sitk.WriteImage(maskTarget, outputPath + '\\' + 'input_mask' + '.mhd', True)
     ############################################
 
     ############# 1) ATLAS LIBRARY ##############################
@@ -95,6 +81,8 @@ def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath,
         if str(extension).endswith(extensionImages) and not str(name).endswith('labels'):
             # Intensity image:
             atlasImagesNames.append(name + '.' + extensionImages)
+            if str(name).endswith('bias'):
+                name = name[:-5]
             # Label image:
             atlasLabelsNames.append(name + '_labels.' + extensionImages)
 
@@ -125,13 +113,28 @@ def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath,
         elastixImageFilter.SetFixedImage(targetImage)
         elastixImageFilter.SetMovingImage(movingImage)
         elastixImageFilter.SetParameterMap(parameterMapVector)
+        # If masked registration, create a mask for each atlas and use ir:
+        if maskedRegistration:
+            otsuImage = sitk.OtsuMultipleThresholds(movingImage, 4, 0, 128,
+                                                    False)  # 5 Classes, itk, doesn't coun't the background as a class, so we use 4 in the input parameters.
+            background = sitk.BinaryMorphologicalOpening(sitk.Equal(otsuImage, 0), vectorRadius, kernel)
+            background = sitk.BinaryDilate(background, vectorRadius, kernel)
+            maskMoving = sitk.Not(background)
+            elastixImageFilter.SetFixedMask(maskTarget)
+            elastixImageFilter.SetMovingMask(maskMoving)
+
         elastixImageFilter.LogToFileOn()
         elastixImageFilter.SetOutputDirectory(tempPath)
         elastixImageFilter.LogToConsoleOff()
         #logFilename = 'reg_log_{0}'.format(i) + '.txt' # iT DOESN'T WORK WITH DIFFERENT LOG NAMES
         logFilename = 'reg_log' + '.txt'
         elastixImageFilter.SetLogFileName(logFilename)
+        # Execute
+        startTime = time.time()
         elastixImageFilter.Execute()
+        endTime = time.time()
+        log.write("Registration time for {0}: {1} sec\n".format(filenameAtlas, endTime - startTime))
+
         # Get the images:
         registeredImages.append(elastixImageFilter.GetResultImage())
         transformParameterMaps.append(elastixImageFilter.GetTransformParameterMap())
@@ -140,6 +143,9 @@ def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath,
         # Compute normalized cross correlation:
         imRegMethod = sitk.ImageRegistrationMethod()
         imRegMethod.SetMetricAsCorrelation()
+        if maskedRegistration:
+            imRegMethod.SetMetricFixedMask(maskTarget)
+            imRegMethod.SetMetricMovingMask(maskMoving)
         metricValue = imRegMethod.MetricEvaluate(targetImage, registeredImages[i])
         # metricValue = sitk.NormalizedCorrelation(registeredImages[i], mask, targetImage) # Is not working
         similarityValue.append(metricValue)
@@ -148,8 +154,9 @@ def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath,
         # If debugging, write image:
         if debug:
             outputFilename = outputPath + '\\' + nameMoving + '_to_target' + '.mhd'
-            sitk.WriteImage(registeredImages[i], outputFilename)
-
+            sitk.WriteImage(registeredImages[i], outputFilename, True)
+            outputFilename = outputPath + '\\' + nameMoving + '_mask' + '.mhd'
+            sitk.WriteImage(maskMoving, outputFilename, True)
     ###########################################
 
     #################### 3) ATLAS SELECTION #################################
@@ -167,40 +174,62 @@ def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath,
     ############################################
 
     #################### 4) LABEL PROPAGATION #######################
+    # Propagate all labels instead of the selected, as they are needed for other label propagation methods:
     propagatedLabels = []
-    for i in range(0, len(indicesSelected)):
+    for i in range(0, atlasImagesNames.__len__()):
         # Read labels:
-        filenameAtlas = atlasLabelsNames[indicesSelected[i]]
+        filenameAtlas = atlasLabelsNames[i]
         labelsImage = sitk.ReadImage(libraryPath + filenameAtlas)
         nameMoving, extension = os.path.splitext(filenameAtlas)
         # Apply its transform:
         transformixImageFilter = sitk.TransformixImageFilter()
         transformixImageFilter.LogToConsoleOff()
         transformixImageFilter.SetMovingImage(labelsImage)
-        transformixImageFilter.SetTransformParameterMap(transformParameterMaps[indicesSelected[i]])
+        transformixImageFilter.SetTransformParameterMap(transformParameterMaps[i])
         transformixImageFilter.SetTransformParameter("FinalBSplineInterpolationOrder", "0")
         transformixImageFilter.SetTransformParameter("ResultImagePixelType", "unsigned char")
         transformixImageFilter.Execute()
         propagatedLabels.append(sitk.Cast(transformixImageFilter.GetResultImage(), sitk.sitkUInt8))
         # If debugging, write label image:
         if debug:
-            outputFilename = outputPath + '\\' + nameMoving + '_propagated.mhd'
-            sitk.WriteImage(propagatedLabels[i], outputFilename)
+            outputFilename = outputPath + '\\' + nameMoving + '_to_target_labels' + '.mhd'
+            sitk.WriteImage(propagatedLabels[i], outputFilename, True)
     ###############################################
 
     ##################### 5) LABEL FUSION #################################
-    outputLabels = sitk.LabelVoting(propagatedLabels, numLabels)
+    # Majority Voting only with selected labels:
+    selectedLabels = []
+    for i in range(0, len(indicesSelected)):
+        selectedLabels.append(propagatedLabels[indicesSelected[i]])
+    outputLabels = sitk.LabelVoting(selectedLabels, numLabels) # Majority Voting only with the selected atlases.
+    # After label voting I will have undecided voxels, add an undecided solving step:
+    outputLabels = MV.SetUndecidedVoxelsUsingDistances(outputLabels, numLabels)
+    # STAPLES
     multilabelStaple = sitk.MultiLabelSTAPLEImageFilter()
     multilabelStaple.SetTerminationUpdateThreshold(1e-4)
     multilabelStaple.SetMaximumNumberOfIterations(30)
     multilabelStaple.SetLabelForUndecidedPixels(numLabels)
-    outputLabelsSTAPLES = multilabelStaple.Execute(propagatedLabels)
+    outputLabelsSTAPLES = multilabelStaple.Execute(selectedLabels) # STAPLES only with the selected atlases.
+    # Global weighting labelling:
+    registeredAtlases = {'image': registeredImages, 'labels': propagatedLabels} # All labels here as the selection is done in the function.
+    numLabelWithoutUndecided = numLabels - 1
+    outputLabelsGWV = GlobalWeightingLabelling(targetImage, registeredAtlases, numLabelWithoutUndecided,
+                                       numSelectedAtlases=numSelectedAtlases,
+                                       expWeight=expWeight, useOnlyLabelVoxels=True, outputPath=tempPath,
+                                       debug=0)
+    # Local weighted voting:
+    outputLabelsLWV = LocalWeightingLabelling(targetImage, registeredAtlases, numLabelWithoutUndecided,
+                                            numSelectedAtlases=numSelectedAtlases,
+                                            expWeight=expWeight, outputPath=tempPath, debug=0)
     ##############################
 
     ###################### 6) APPLY MASK ###############
-    outputLabelsMask = sitk.Multiply(outputLabels, softTissueMask)
-    outputLabelsSTAPLESmask = sitk.Multiply(outputLabelsSTAPLES, softTissueMask)
-
+    multImageFilter = sitk.MultiplyImageFilter()
+    multImageFilter.SetGlobalDefaultCoordinateTolerance(1e-2)
+    outputLabelsMask = multImageFilter.Execute(outputLabels, softTissueMask)
+    outputLabelsSTAPLESMask = multImageFilter.Execute(outputLabelsSTAPLES, softTissueMask)
+    outputLabelsGWVMask = multImageFilter.Execute(outputLabelsSTAPLES, softTissueMask)
+    outputLabelsLWVMask = multImageFilter.Execute(outputLabelsSTAPLES, softTissueMask)
     ##################### 6) OUTPUT ############################
     # Reset the origin and direction to defaults. As I'm doing that in the plugin.
     #outputLabels.SetOrigin((0,0,0))
@@ -212,13 +241,19 @@ def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath,
     #outputLabelsSTAPLESmask.SetOrigin((0, 0, 0))
     #outputLabelsSTAPLESmask.SetDirection((1, 0, 0, 0, 1, 0, 0, 0, 1))
     # Write output:
-    sitk.WriteImage(outputLabels, outputPath + "segmentedImage.mhd")
-    sitk.WriteImage(outputLabelsSTAPLES, outputPath + "segmentedImageSTAPLES.mhd")
-    sitk.WriteImage(outputLabelsMask, outputPath + "segmentedImageMask.mhd")
-    sitk.WriteImage(outputLabelsSTAPLESmask, outputPath + "segmentedImageSTAPLESmask.mhd")
+    sitk.WriteImage(outputLabels, outputPath + "segmentedImage.mhd", True)
+    sitk.WriteImage(outputLabelsMask, outputPath + "segmentedImageMask.mhd", True)
+    sitk.WriteImage(outputLabelsSTAPLES, outputPath + "segmentedImageSTAPLES.mhd", True)
+    sitk.WriteImage(outputLabelsSTAPLESMask, outputPath + "segmentedImageSTAPLESMask.mhd", True)
+    sitk.WriteImage(outputLabelsGWV, outputPath + "segmentedImageGWV.mhd", True)
+    sitk.WriteImage(outputLabelsGWVMask, outputPath + "segmentedImageGWVMask.mhd", True)
+    sitk.WriteImage(outputLabelsLWV, outputPath + "segmentedImageLWV.mhd", True)
+    sitk.WriteImage(outputLabelsLWVMask, outputPath + "segmentedImageLWVMask.mhd", True)
     # Dictionary with results:
     dictResults = {'segmentedImage': outputLabels, 'segmentedImageSTAPLES': outputLabelsSTAPLES,
-                   'segmentedImageMask': outputLabelsMask, 'segmentedImageSTAPLESmask': outputLabelsSTAPLESmask}
+                   'segmentedImageMask': outputLabelsMask, 'segmentedImageSTAPLESmask': outputLabelsSTAPLESMask,
+                   'segmentedImageGWV': outputLabelsGWV, 'segmentedImageGWVMask': outputLabelsGWVMask,
+                   'segmentedImageLWV': outputLabelsLWV, 'segmentedImageLWVMask': outputLabelsLWVMask}
 
     # Close log file:
     log.close()
