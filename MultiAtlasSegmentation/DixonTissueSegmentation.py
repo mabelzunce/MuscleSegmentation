@@ -1,6 +1,8 @@
 #! python3
 import SimpleITK as sitk
 import numpy as np
+
+
 # DixonTissueSegmentation received the four dixon images in the following order: in-phase, out-of-phase, water, fat.
 # Returns a labelled image into 4 tissue types: air-background (0), soft-tissue (1), soft-tissue/fat (2), fat (3)
 def DixonTissueSegmentation(dixonImages):
@@ -61,3 +63,36 @@ def DixonTissueSegmentation(dixonImages):
     segmentedImage.SetOrigin(dixonImages[0].GetOrigin())
     segmentedImage.SetDirection(dixonImages[0].GetDirection())
     return segmentedImage
+
+
+# Function that creates a mask for the body from an in-phase dixon image. It uses an Otsu thresholding and morphological operations
+# to create a mask where the background is 0 and the body is 1. Can be used for masking image registration.
+def GetBodyMaskFromInPhaseDixon(inPhaseImage, vectorRadius = (2,2,2)):
+    kernel = sitk.sitkBall
+    otsuImage = sitk.OtsuMultipleThresholds(inPhaseImage, 4, 0, 128, # 4 classes and 128 bins
+                                            False)  # 5 Classes, itk, doesn't coun't the background as a class, so we use 4 in the input parameters.
+    # Open the mask to remove connected regions
+    background = sitk.BinaryMorphologicalOpening(sitk.Equal(otsuImage, 0), vectorRadius, kernel)
+    background = sitk.BinaryDilate(background, vectorRadius, kernel)
+    bodyMask = sitk.Not(background)
+    bodyMask.CopyInformation(inPhaseImage)
+    return bodyMask
+
+# Function that creates a soft tissue mask from an in-phase dixon image. It uses an Otsu thresholding and the postprocesses
+# to leave the largest connected object.
+def GetSoftTissueMaskFromInPhaseDixon(inPhaseImage, vectorRadius=(2,2,2)):
+    kernel = sitk.sitkBall
+    otsuImage = sitk.OtsuMultipleThresholds(inPhaseImage, 4, 0, 128,  # 4 classes and 128 bins
+                                            False)  # 5 Classes, itk, doesn't coun't the background as a class, so we use 4 in the input parameters.
+
+    softTissueMask = sitk.Or(sitk.Equal(otsuImage, 1), sitk.Equal(otsuImage, 2))
+    # Erode to disconnect poorly connected regions:
+    softTissueMask = sitk.BinaryErode(softTissueMask, vectorRadius, kernel)
+    # Get the largest connected component:
+    connectedFilter = sitk.ConnectedComponentImageFilter()
+    connectedFilter.FullyConnectedOff()
+    softTissueMaskObjects = connectedFilter.Execute(softTissueMask)
+    softTissueMask = sitk.BinaryDilate(softTissueMaskObjects==1, vectorRadius, kernel) # Keep largest object and dilate
+    softTissueMask.CopyInformation(inPhaseImage)
+    return softTissueMask
+
