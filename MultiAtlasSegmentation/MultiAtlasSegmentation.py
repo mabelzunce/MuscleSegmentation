@@ -37,8 +37,8 @@ def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath,
     ############################## MULTI-ATLAS SEGMENTATION PARAMETERS ######################
     # Parameter files:
     parameterFilesPath = 'D:\\Martin\\Segmentation\\Registration\\Elastix\\ParametersFile\\'
-    paramFileRigid = 'Parameters_Rigid_NMI'
-
+    paramFileRigid = 'Parameters_Rigid_NCC'
+    paramFileAffine = 'Parameters_Affine_NCC'
     # Log registration parameters:
     log.write("Registration parameter files: {0}, {1}\n".format(paramFileRigid, paramFileBspline))
     #paramFilesToTest = {'Parameters_BSpline_NCC','Parameters_BSpline_NCC_1000iters', 'Parameters_BSpline_NCC_4096samples', 'Parameters_BSpline_NCC_1000iters_4096samples'}
@@ -50,14 +50,8 @@ def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath,
     ##########################################################################################
 
     ########## MASK FOR REGISTRATION ################
-    vectorRadius = (2, 2, 2)
-    kernel = sitk.sitkBall
     if maskedRegistration:
-        otsuImage = sitk.OtsuMultipleThresholds(targetImage, 4, 0, 128,
-                                                False)  # 5 Classes, itk, doesn't coun't the background as a class, so we use 4 in the input parameters.
-        background = sitk.BinaryMorphologicalOpening(sitk.Equal(otsuImage, 0), vectorRadius, kernel)
-        background = sitk.BinaryDilate(background, vectorRadius, kernel)
-        maskTarget = sitk.Not(background)
+        maskTarget = DixonTissueSeg.GetBodyMaskFromInPhaseDixon(targetImage)
 
     ############################## MULTI-ATLAS SEGMENTATION ##################################
     ############## 0) TARGET IMAGE #############
@@ -108,6 +102,8 @@ def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath,
         parameterMapVector.append(elastixImageFilter.ReadParameterFile(parameterFilesPath
                                                                        + paramFileRigid + '.txt'))
         parameterMapVector.append(elastixImageFilter.ReadParameterFile(parameterFilesPath
+                                                                       + paramFileAffine + '.txt'))
+        parameterMapVector.append(elastixImageFilter.ReadParameterFile(parameterFilesPath
                                                                        + paramFileBspline + '.txt'))
         # Registration:
         elastixImageFilter.SetFixedImage(targetImage)
@@ -115,11 +111,7 @@ def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath,
         elastixImageFilter.SetParameterMap(parameterMapVector)
         # If masked registration, create a mask for each atlas and use ir:
         if maskedRegistration:
-            otsuImage = sitk.OtsuMultipleThresholds(movingImage, 4, 0, 128,
-                                                    False)  # 5 Classes, itk, doesn't coun't the background as a class, so we use 4 in the input parameters.
-            background = sitk.BinaryMorphologicalOpening(sitk.Equal(otsuImage, 0), vectorRadius, kernel)
-            background = sitk.BinaryDilate(background, vectorRadius, kernel)
-            maskMoving = sitk.Not(background)
+            maskMoving = DixonTissueSeg.GetBodyMaskFromInPhaseDixon(movingImage)
             elastixImageFilter.SetFixedMask(maskTarget)
             elastixImageFilter.SetMovingMask(maskMoving)
 

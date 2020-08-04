@@ -20,14 +20,18 @@ USE_COSINES_AND_ORIGIN = 1
 # The target is the folder where the MRI images to be processed are. In the folder only
 # folders with the case name should be found. Inside each case folder there must be a subfolder
 # named "ForLibrary" with the dixon images called "case_I, case_O, case_W, case_F".
-targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\DixonFovOK\\'
+targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\MarathonStudy\\PreMarathon\\TempToSegment\\'
+#targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\MarathonStudy\\PostMarathon\\NotSegmented\\'
+#targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\RNOH_TLC\\GoodToUse\\NotSegmented\\7362934\\'
+
+
 # Look for the folders or shortcuts:
 files = os.listdir(targetPath)
 # It can be lnk with shortcuts or folders:
 extensionShortcuts = 'lnk'
 strForShortcut = '-> '
 extensionImages = 'mhd'
-tagSequence = '_I'
+tagSequence = '_I'#''_T1W'
 targetImagesNames = []
 for filename in files:
     name, extension = os.path.splitext(filename)
@@ -38,7 +42,7 @@ for filename in files:
         indexStart = shortcut.as_string().find(strForShortcut)
         dataPath = shortcut.as_string()[indexStart+len(strForShortcut):] + '\\'
     else:
-        dataPath = targetPath + filename
+        dataPath = targetPath + filename + '\\'
     # Check if the images are available:
     filename = dataPath + 'ForLibrary\\' + name + tagSequence + '.' + extensionImages
     if os.path.exists(filename):
@@ -49,10 +53,12 @@ print("Number of target images: {0}".format(len(targetImagesNames)))
 print("List of files: {0}\n".format(targetImagesNames))
 
 ############################## MULTI-ATLAS SEGMENTATION PARAMETERS ######################
-libraryVersion = 'V1.0'
+libraryVersion = 'V1.2'
 # Library path:
-libraryPath = 'D:\\Martin\\Segmentation\\AtlasLibrary\\' + libraryVersion + '\\Normalized\\'
+libraryPath = 'D:\\Martin\\Segmentation\\AtlasLibrary\\' + libraryVersion + '\\NativeResolutionAndSize\\'
 
+# Segmentation type:
+regType = 'BSplineStandardGradDesc_NMI_2000iters_3000samples_15mm_RndSparseMask'#'NMI'
 # Number of Atlases to select:
 numberOfSelectedAtlases = 5
 
@@ -62,12 +68,13 @@ numLabels = 11 # 10 for muscles and bone, and 11 for undecided
 
 ###################### OUTPUT #####################
 # Output path:
-baseOutputPath = 'D:\\MuscleSegmentationEvaluation\\SegmentationWithPython\\ForFatFractionPaper\\' + libraryVersion + '\\NonrigidNCCplusplus_N{0}_MaxProb_Mask\\'.format(numberOfSelectedAtlases)
+baseOutputPath = 'D:\\MuscleSegmentationEvaluation\\SegmentationWithPython\\Marathon\\Pre\\' + libraryVersion + '\\Nonrigid{0}_N{1}_MaxProb_Mask\\'.format(regType, numberOfSelectedAtlases)
+#baseOutputPath = 'D:\\Martin\\Data\\MuscleSegmentation\\RNOH_TLC\\GoodToUse\\NotSegmented\\7362934\\Segmented\\' + libraryVersion + '\\Nonrigid{0}_N{1}_MaxProb_Mask\\'.format(regType, numberOfSelectedAtlases)
 if not os.path.exists(baseOutputPath):
     os.makedirs(baseOutputPath)
 
 
-del targetImagesNames[0:7]
+#targetImagesNames = targetImagesNames[8]
 ##########################################################################################
 ################################### SEGMENT EACH IMAGE ###################################
 for targetFilename in targetImagesNames:
@@ -95,7 +102,7 @@ for targetFilename in targetImagesNames:
 
     # Apply bias correction:
     shrinkFactor = (2,2,1) # Having problems otherwise:
-    fixedImage = ApplyBiasCorrection(fixedImage, shrinkFactor)
+    #fixedImage = ApplyBiasCorrection(fixedImage, shrinkFactor)
 
     ############# 1) ATLAS LIBRARY ##############################
     # To the function I just need to pass the folder name, but first we need to be sure
@@ -129,13 +136,13 @@ for targetFilename in targetImagesNames:
     background = sitk.BinaryDilate(background, vectorRadius, kernel)
     softTissueMask = sitk.And(softTissueMask, sitk.Not(background))
     if DEBUG:
-        sitk.WriteImage(softTissueMask, outputPath + 'softTissueMask.mhd')
+        sitk.WriteImage(softTissueMask, outputPath + 'softTissueMask.mhd', True)
     #   sitk.WriteImage(background, outputPath + 'background.mhd')
     # c) Dixon
     sitkIm.CopyImageProperties(softTissueMask, fixedImage)
 
     ################ 3) CALL MULTI ATLAS SEGMENTATION #########################
-    MultiAtlasSegmentation(fixedImage, softTissueMask, libraryPath, outputPath, DEBUG, numSelectedAtlases=numberOfSelectedAtlases)
+    MultiAtlasSegmentation(fixedImage, softTissueMask, libraryPath, outputPath, DEBUG, numSelectedAtlases=numberOfSelectedAtlases, paramFileBspline = regType)
 
     ########################################################################
     ##### MOVE BACK FILES

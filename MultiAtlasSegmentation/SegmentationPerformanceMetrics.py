@@ -11,11 +11,10 @@ import numpy as np
 def GetOverlapMetrics(reference, segmented, numLabels):
     overlap_measures_filter = sitk.LabelOverlapMeasuresImageFilter()
     overlap_measures_filter.SetGlobalDefaultCoordinateTolerance(1e-2)
-    # First execute the filter:
-    overlap_measures_filter.Execute(reference, segmented)
+
     # If numLabels 0, get a general metric:
-    jaccard = [], dice = [], volumeSimilarity = [], fn = [], fp = [], tn = [], tp = [],
-    sensitivity = [], specificity = [], precision = [], fallout = []
+    jaccard = []; dice = []; volumeSimilarity = []; fn = []; fp = []; tn = []; tp = []
+    sensitivity = []; specificity = []; precision = []; fallout = []
     if numLabels == 0:
         overlap_measures_filter.Execute(reference, segmented)
         jaccard.append(overlap_measures_filter.GetJaccardCoefficient())
@@ -31,21 +30,23 @@ def GetOverlapMetrics(reference, segmented, numLabels):
         fallout.append(fp[0] / (fp[0] + tn[0]))
     else:
         for i in range(0,numLabels):
-            jaccard.append(overlap_measures_filter.GetJaccardCoefficient(i+1))
-            dice.append(overlap_measures_filter.GetDiceCoefficient(i+1))
-            volumeSimilarity.append(overlap_measures_filter.GetVolumeSimilarity(i+1))
-            fn.append(overlap_measures_filter.GetFalseNegativeError(i+1))
-            fp.append(overlap_measures_filter.GetFalsePositiveError(i+1))
-            tp.append(overlap_measures_filter.GetMeanOverlap(i+1))
-            tn.append(np.prod(reference.GetSize()) - overlap_measures_filter.GetUnionOverlap(i+1))
+            # First execute the filter:
+            overlap_measures_filter.Execute(reference==(i+1), segmented==(i+1))
+            jaccard.append(overlap_measures_filter.GetJaccardCoefficient())
+            dice.append(overlap_measures_filter.GetDiceCoefficient())
+            volumeSimilarity.append(overlap_measures_filter.GetVolumeSimilarity())
+            fn.append(overlap_measures_filter.GetFalseNegativeError())
+            fp.append(overlap_measures_filter.GetFalsePositiveError())
+            tp.append(overlap_measures_filter.GetMeanOverlap())
+            tn.append(np.prod(reference.GetSize()) - overlap_measures_filter.GetUnionOverlap())
             sensitivity.append(tp[i] / (tp[i] + fn[i]))
             specificity.append(tn[i] / (tn[i] + fp[i]))
             precision.append(tp[i] / (tp[i] + fp[i]))
             fallout.append(fp[i] / (fp[i] + tn[i]))
 
-    metrics = {'dice':dice, 'jaccard': jaccard, 'volumeSimilarity':volumeSimilarity,
-               'fn':fn, 'fp':fp, 'tp':tp, 'tn':tn, 'sensitivity':sensitivity, 'specificity':specificity,
-               'precision':precision, 'fallout':fallout}
+    metrics = {'dice':np.array(dice), 'jaccard': np.array(jaccard), 'volumeSimilarity':np.array(volumeSimilarity),
+               'fn':np.array(fn), 'fp':np.array(fp), 'tp':np.array(tp), 'tn':np.array(tn), 'sensitivity':np.array(sensitivity), 'specificity':np.array(specificity),
+               'precision':np.array(precision), 'fallout':np.array(fallout)}
     return metrics
 
 

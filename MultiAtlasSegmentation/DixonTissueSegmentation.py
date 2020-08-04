@@ -91,8 +91,12 @@ def GetSoftTissueMaskFromInPhaseDixon(inPhaseImage, vectorRadius=(2,2,2)):
     # Get the largest connected component:
     connectedFilter = sitk.ConnectedComponentImageFilter()
     connectedFilter.FullyConnectedOff()
-    softTissueMaskObjects = connectedFilter.Execute(softTissueMask)
+    softTissueMaskObjects = sitk.RelabelComponent(connectedFilter.Execute(softTissueMask)) # RelabelComponent sort its by size.
     softTissueMask = sitk.BinaryDilate(softTissueMaskObjects==1, vectorRadius, kernel) # Keep largest object and dilate
+    # Fill holes (in case the dilation was not enough):
+    fillHolesFilter = sitk.BinaryFillholeImageFilter()
+    fillHolesFilter.FullyConnectedOff()
+    softTissueMask = fillHolesFilter.Execute(softTissueMask)
     softTissueMask.CopyInformation(inPhaseImage)
     return softTissueMask
 

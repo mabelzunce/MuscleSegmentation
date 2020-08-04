@@ -41,6 +41,7 @@ def ApplyBiasCorrection(inputImage, shrinkFactor):
         # Apply to the image:
         output = sitk.Multiply(inputImage, biasField)
     else:
-        output = biasFieldCorrFilter.Execute(inputImage, mask)
+        #output = biasFieldCorrFilter.Execute(inputImage, mask)
+        output = biasFieldCorrFilter.Execute(inputImage)
     # return the output:
     return output
