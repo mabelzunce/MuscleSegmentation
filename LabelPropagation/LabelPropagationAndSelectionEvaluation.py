@@ -15,9 +15,9 @@ from DynamicLabelFusionWithSimilarityWeights import DynamicLabelFusionWithSimila
 
 ############################### TARGET FOLDER ###################################
 # The target folder needs to have all the files that are saved by the plugin when intermediates files are saved.
-libraryVersion = 'V1.1.3'
-segType = 'NCC_1000_2048'
-numberOfSelectedAtlases = 5 # I need all the atlases, but if the segmentation was ran in dbug mode I'll have all anyways.
+libraryVersion = 'V1.2'
+segType = 'BSplineStandardGradDesc_NMI_2000iters_2000samples'
+numberOfSelectedAtlases = 19 # I need all the atlases, but if the segmentation was ran in dbug mode I'll have all anyways.
 excludeFemurs = True # The femurs have been segmented in a few atlases, but because they are only in a few of them, it
                     # introduces erros in the undecided label.
 numLabels = 11
@@ -27,11 +27,13 @@ numLabelWithoutUndecided = numLabels - 1
 
 maskedRegistration = True
 libraryCases = ''
-libraryPath = 'D:\\Martin\\Segmentation\\AtlasLibrary\\' + libraryVersion + '\\NativeResolutionAndSize\\'
+libraryPath = 'D:\\Martin\\Segmentation\\AtlasLibrary\\' + libraryVersion + '\\NativeResolutionAndSize2\\'
 targetPath = 'D:\\MuscleSegmentationEvaluation\\SegmentationWithPython\\' + libraryVersion + '\\TestWithLibrary\\Nonrigid{0}_N{1}_MaxProb_Mask\\'.format(segType, numberOfSelectedAtlases)
 targetPath = 'D:\\MuscleSegmentationEvaluation\\SegmentationWithPython\\' + libraryVersion + '\\TestWithLibrary\\{0}_N{1}_{2}\\'.format(segType, numberOfSelectedAtlases, maskedRegistration)
-outputPath = 'D:\\MuscleSegmentationEvaluation\\SegmentationWithPython\\' + libraryVersion + '\\TestWithLibrary\\{0}_N{1}_{2}_SelectionFusionTestV3b\\'.format(segType, numberOfSelectedAtlases, maskedRegistration)
+outputPath = 'D:\\MuscleSegmentationEvaluation\\SegmentationWithPython\\' + libraryVersion + '\\TestWithLibrary\\{0}_N{1}_{2}_LibSize\\'.format(segType, numberOfSelectedAtlases, maskedRegistration)
 # Exponential weights:
+if not os.path.exists(outputPath):
+    os.mkdir(outputPath)
 expWeight=2
 outputPath = outputPath + '\\expweightFusion_{0}\\'.format(expWeight)
 if not os.path.exists(outputPath):
@@ -46,20 +48,21 @@ dirWithCases = os.listdir(targetPath)
 atlasImagesNames = []
 atlasLabelsNames = []
 # Label fusion strategies to include in the analysis
-processWithMajorityVoting = False
-processWithSTAPLES = False
+processWithMajorityVoting = True
+processWithSTAPLES = True
 processWithGlobalWeightedVoting = True
 processWithRoiWeightedVoting = True
 
 # Name of atlases in order to be included:
 atlasNamesInOrderOfInclusion = ['ID00001', 'ID00002', 'ID00003', 'ID00005', 'ID00006', 'ID00008', 'ID00010', 'ID00011',
-                     'ID00021', 'ID00029','L0511645', '7390413', '7386347', 'L0045955','L0324841','L0364068','L0029976']
+                     'ID00013', 'ID00014', 'ID00021', 'ID00029', 'ID00061','L0511645', '7390413', '7386347', 'L0045955',
+                                'L0324841','L0364068','L0029976']
 # Instead of using all cases from dirWithCases, I select a few of them for the library:
 numberOfCases = 8
 
 # Process multiple number of cases selection:
 #[4,6,8,10,12,14,17]:
-for numberOfCases in [12, 17]:
+for numberOfCases in [15, 17]:
     atlasesLibrary = atlasNamesInOrderOfInclusion[0:numberOfCases]
     # For the segmentation, we evaluate all of them:
     for filenameCases in dirWithCases:

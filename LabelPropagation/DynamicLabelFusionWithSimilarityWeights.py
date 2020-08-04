@@ -219,7 +219,7 @@ def GetMajorityVotingFromProbMaps(probabilityMaps, useBackgroundAsLabel = True):
     #labels[backgroundMask] = 0
     #######################################################################################
     # Create a new itk image with the labels
-    labelsImage = sitk.GetImageFromArray(labels)
+    labelsImage = sitk.Cast(sitk.GetImageFromArray(labels), sitk.sitkUInt8)
     labelsImage.CopyInformation(probabilityMaps[0])
     return labelsImage
 

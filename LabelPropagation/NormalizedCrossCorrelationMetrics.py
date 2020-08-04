@@ -58,8 +58,11 @@ def RoiNormalizedCrossCorrelation(image1, image2, roiMask):
 def RoiNormalizedCrossCorrelationAsInITK(image1, image2, roiMask):
     lncc = 0
     # Mask each image:
-    image1_roi = sitk.Mask(image1, roiMask, 0)
-    image2_roi = sitk.Mask(image2, roiMask, 0)
+    maskImageFilter = sitk.MaskImageFilter()
+    maskImageFilter.SetGlobalDefaultCoordinateTolerance(1e-3)
+    maskImageFilter.SetOutsideValue(0)
+    image1_roi = maskImageFilter.Execute(image1, roiMask)
+    image2_roi = maskImageFilter.Execute(image2, roiMask)
 
     # Instead of using StatisticsImageFilter, I use LabelStatisticsImageFilter as I need to compute the stats in the label.
     labelStatisticFilter = sitk.LabelStatisticsImageFilter()
