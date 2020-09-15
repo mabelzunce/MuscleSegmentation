@@ -1,9 +1,10 @@
 from __future__ import print_function
 from GetMetricFromElastixRegistration import GetFinalMetricFromElastixLogFile
 from MultiAtlasSegmentation import MultiAtlasSegmentation
-from DixonTissueSegmentation import DixonTissueSegmentation
+import DixonTissueSegmentation
 import matplotlib.pyplot as plt
 import SimpleITK as sitk
+import PostprocessingLabels
 import numpy as np
 import sys
 import os
@@ -17,7 +18,7 @@ caseName = "ID00003"
 #caseName = "7390413"
 dixonTags = ("I","O",'W',"F")
 if caseName.startswith('ID'):
-    basePath = "D:\\Martin\\Data\\MuscleSegmentation\\MarathonStudy\\{0}\\ForLibrary\\".format(caseName)
+    basePath = "D:\\Martin\\Data\\MuscleSegmentation\\MarathonStudy\\PreMarathon\\Segmented\\{0}\\ForLibrary\\".format(caseName)
 else:
     basePath = "D:\\Martin\\Data\\MuscleSegmentation\\ForLibrary\\{0}\\ForLibrary\\".format(caseName)
 
@@ -84,9 +85,13 @@ for fileToMove in filesToMove:
 # 1)Not any restriction:
 #softTissueMask = sitk.Greater(dixonImages[0], 0)
 # 2) Dixon soft tissue:
-dixonSegmentedImage = DixonTissueSegmentation(dixonImages)
+dixonSegmentedImage = DixonTissueSegmentation.DixonTissueSegmentation(dixonImages)
 softTissueMask = dixonSegmentedImage == 1 #sitk.Equal(dixonSegmentedImage,1)
+fatTissueMask = dixonSegmentedImage == 3
+segmented2D = PostprocessingLabels.FilterUnconnectedRegionsPerSlices(fatTissueMask, 1)
 
+plt.figure()
+plt.imshow(sitk.GetArrayViewFromImage(segmented2D)[50, :, :], cmap=plt.cm.Greys_r)
 # Show dixon segmented image and the soft tissue mask:
 #plt.subplot(121)
 #z = int(dixonSegmentedImage.GetDepth() / 2)

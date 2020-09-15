@@ -1,5 +1,6 @@
 #! python3
 import SimpleITK as sitk
+import PostprocessingLabels
 import numpy as np
 
 
@@ -62,8 +63,39 @@ def DixonTissueSegmentation(dixonImages):
     segmentedImage.SetSpacing(dixonImages[0].GetSpacing())
     segmentedImage.SetOrigin(dixonImages[0].GetOrigin())
     segmentedImage.SetDirection(dixonImages[0].GetDirection())
+    # The fat fraction image can have issues in the edge, for that reason we apply a body mask from the inphase image
+    maskBody = GetBodyMaskFromInPhaseDixon(dixonImages[0], vectorRadius = (2,2,2))
+    # Apply mask:
+    maskFilter = sitk.MaskImageFilter()
+    maskFilter.SetMaskingValue(1)
+    maskFilter.SetOutsideValue(0)
+    segmentedImage = maskFilter.Execute(segmentedImage, sitk.Not(maskBody))
     return segmentedImage
 
+
+# gets the skin fat from a dixon segmented image, which consists of dixonSegmentedImage (0=air, 1=muscle, 2=muscle/fat,
+# 3=fat)
+def GetSkinFatFromTissueSegmentedImage(dixonSegmentedImage):
+    # Inital skin image:
+    skinFat = dixonSegmentedImage == 3
+    skinFat = PostprocessingLabels.FilterUnconnectedRegionsPerSlices(skinFat, 1)
+    # Body image:
+    bodyMask = dixonSegmentedImage > 0
+    # Create a mask for other tissue:
+    notFatMask = dixonSegmentedImage == 1 # Exclude fat
+    # Start eroding body mask to remove skin fat (which would icnrease dice between the eroded mask and the other soft
+    # tissue mask) until the dice score starts decreasing.
+    overlap_measures_filter = sitk.LabelOverlapMeasuresImageFilter()
+    overlap_measures_filter.SetGlobalDefaultCoordinateTolerance(1e-2)
+    while True:
+        # Erode:
+        bodyMask = sitk.Erode(bodyMask)
+        # Check overlap with fat until reaches a threshold:
+        sitk.And(bodyMask, skinFat)
+        overlap_measures_filter.Execute(bodyMask, notFatMask)
+        jaccard.append(overlap_measures_filter.GetJaccardCoefficient())
+        dice.append(overlap_measures_filter.GetDiceCoefficient())
+    return skinFat
 
 # Function that creates a mask for the body from an in-phase dixon image. It uses an Otsu thresholding and morphological operations
 # to create a mask where the background is 0 and the body is 1. Can be used for masking image registration.
@@ -76,6 +108,16 @@ def GetBodyMaskFromInPhaseDixon(inPhaseImage, vectorRadius = (2,2,2)):
     background = sitk.BinaryDilate(background, vectorRadius, kernel)
     bodyMask = sitk.Not(background)
     bodyMask.CopyInformation(inPhaseImage)
+    # Fill holes:
+    #bodyMask = sitk.BinaryFillhole(bodyMask, False)
+    # Fill holes in 2D (to avoid holes coming from bottom and going up):
+    for j in range(0, bodyMask.GetSize()[2]):
+        slice = bodyMask[:,:,j]
+        slice = sitk.BinaryFillhole(slice, False)
+        # Now paste the slice in the output:
+        slice = sitk.JoinSeries(slice) # Needs tobe a 3D image
+        bodyMask = sitk.Paste(bodyMask, slice, slice.GetSize(), destinationIndex=[0, 0, j])
+
     return bodyMask
 
 # Function that creates a soft tissue mask from an in-phase dixon image. It uses an Otsu thresholding and the postprocesses
