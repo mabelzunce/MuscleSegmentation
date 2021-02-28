@@ -13,10 +13,10 @@ import os
 DEBUG = True
 
 # Data
-nameCase = 'ID00014'
+nameCase = 'ID00060'
 srcSide = 'right'
 dstSide = 'left'
-dataPath = 'D:\\Martin\\Data\\MuscleSegmentation\\MarathonStudy\\PreMarathon\\Segmented\\' + nameCase + '\\ForLibrary\\'
+dataPath = 'D:\\Martin\\Data\\MuscleSegmentation\\MarathonStudy\\PreMarathon\\NotSegmented\\' + nameCase + '\\ForLibrary\\'
 nameImage = nameCase + '_I'
 nameLabels = nameCase + '_labels_' + srcSide
 extImages = '.mhd'

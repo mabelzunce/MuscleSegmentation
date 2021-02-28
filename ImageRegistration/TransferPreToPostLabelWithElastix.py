@@ -10,20 +10,19 @@ import numpy as np
 import sys
 import os
 
-nameFixed = 'ID00003'
-nameMoving = '7390413'
-imagesPath = 'D:\\Martin\\Segmentation\\AtlasLibrary\\V1.0\\NativeResolutionAndSize\\'
-movingImagesPath = 'D:\\Martin\\Data\\MuscleSegmentation\\RNOH_TLC\\GoodToUse\\Segmented\\'
-fixedImage = sitk.ReadImage(imagesPath + nameFixed + '_bias.mhd')
-# Read moving images:
-tagsOfImagesToUse = ['_I', '_O']
-vectorOfImages = sitk.VectorOfImage()
-for tags in tagsOfImagesToUse:
-    vectorOfImages.push_back(sitk.ReadImage(movingImagesPath + nameMoving + '\\ForLibrary\\' + nameMoving + tags + '.mhd'))
-# Output path:
-outputPath = "D:\\MuscleSegmentationEvaluation\\RegistrationParameters\\testMultipleIO\\"
-if not os.path.exists(outputPath):
-    os.mkdir(outputPath)
+# Data
+nameCase = 'ID00061'
+srcSide = 'right'
+dstSide = 'left'
+prePath = 'D:\\Martin\\Data\\MuscleSegmentation\\MarathonStudy\\PreMarathon\\Segmented\\' + nameCase + '\\ForLibrary\\'
+postPath = 'D:\\Martin\\Data\\MuscleSegmentation\\MarathonStudy\\PostMarathon\\NotSegmented\\' + nameCase + '\\ForLibrary\\'
+nameImage = nameCase + '_I'
+nameLabels = nameCase + '_labels'
+extImages = '.mhd'
+# Read images:
+preImage = sitk.ReadImage(prePath + nameImage + extImages)
+preLabels = sitk.ReadImage(prePath + nameLabels + extImages)
+postImage = sitk.ReadImage(postPath + nameImage + extImages)
 
 # Parameter files:
 parameterFilesPath = 'D:\\Martin\\Segmentation\\Registration\\Elastix\\ParametersFile\\'
@@ -40,15 +39,32 @@ parameterMapVector.append(elastixImageFilter.ReadParameterFile(parameterFilesPat
 parameterMapVector.append(elastixImageFilter.ReadParameterFile(parameterFilesPath
                                                                + paramFileNonRigid + '.txt'))
 # Registration:
-elastixImageFilter.SetFixedImage(fixedImage)
-elastixImageFilter.SetMovingImage(vectorOfImages)
+elastixImageFilter.SetFixedImage(postImage)
+elastixImageFilter.SetMovingImage(preImage)
 elastixImageFilter.SetParameterMap(parameterMapVector)
 elastixImageFilter.Execute()
 # Get the images:
 resultImage = elastixImageFilter.GetResultImage()
 transformParameterMap = elastixImageFilter.GetTransformParameterMap()
-# Write image:
-outputFilename = outputPath + nameFixed + '_' + nameMoving + '.mhd'
+# Compute normalized cross correlation:
+imRegMethod = sitk.ImageRegistrationMethod()
+imRegMethod.SetMetricAsCorrelation()
+metricValue = imRegMethod.MetricEvaluate(sitk.Cast(postImage, sitk.sitkFloat32), sitk.Cast(resultImage, sitk.sitkFloat32))
+print("Normalized cross-correlation between reflected left and right: {0}".format(metricValue))
+
+# Transfer the labels:
+# Apply its transform:
+transformixImageFilter = sitk.TransformixImageFilter()
+transformixImageFilter.SetMovingImage(preLabels)
+transformixImageFilter.SetTransformParameterMap(transformParameterMap)
+transformixImageFilter.SetTransformParameter("FinalBSplineInterpolationOrder", "0")
+transformixImageFilter.SetTransformParameter("ResultImagePixelType", "unsigned char")
+transformixImageFilter.Execute()
+postLabels = sitk.Cast(transformixImageFilter.GetResultImage(), sitk.sitkUInt8)
+
+# Write registered image:
+outputFilename = postPath + nameCase + '_pre2post.mhd'
 sitk.WriteImage(resultImage, outputFilename)
-outputFilename = outputPath + nameFixed + '.mhd'
-sitk.WriteImage(fixedImage, outputFilename)
+# Write transferred labels:
+outputFilename = postPath + nameLabels + '.mhd'
+sitk.WriteImage(postLabels, outputFilename)

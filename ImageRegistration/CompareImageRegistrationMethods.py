@@ -15,7 +15,8 @@ outputPath = "D:\\MuscleSegmentationEvaluation\\RegistrationParameters\\"
 parameterFilesPath = 'D:\\Martin\\Segmentation\\Registration\\Elastix\\ParametersFile\\'
 paramFileRigid = 'Parameters_Rigid_NCC'
 paramFilesToTest = ['Parameters_BSpline_NCC', 'Parameters_BSpline_NCC_1000iters_4096samples', 'Parameters_BSpline_NCC_8192samples', 'Parameters_BSpline_NCC_2000iters_8192samples', 'Parameters_BSpline_NCC_4000iters_8192samples']
-paramFilesToTest = ['Parameters_BSpline_NCC_4000iters_8192samples_3levels']
+paramFilesToTest = ['BSplineStandardGradDesc_NMI_2000iters_3000samples','BSplineStandardGradDesc_NMI_2000iters_3000samples_15mm','BSplineStandardGradDesc_NMI_2000iters_3000samples_15mm_RndSparseMask',
+                    'Parameters_BSpline_NCC_4000iters_8192samples_3levels']
 # Library path:
 libraryPath = "D:\\Martin\\Segmentation\\AtlasLibrary\\V1.0\\Normalized\\"
 # Look for the raw files:
