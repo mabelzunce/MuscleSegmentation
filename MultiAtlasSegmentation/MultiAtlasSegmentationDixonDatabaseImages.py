@@ -11,9 +11,10 @@ import winshell
 import numpy as np
 import sys
 import os
+import DixonTissueSegmentation
 
 ############################### CONFIGURATION #####################################
-DEBUG = 1 # In debug mode, all the intermediate iamges are written.
+DEBUG = 0 # In debug mode, all the intermediate iamges are written.
 USE_COSINES_AND_ORIGIN = 1
 
 ############################### TARGET FOLDER ###################################
@@ -23,16 +24,20 @@ USE_COSINES_AND_ORIGIN = 1
 targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\MarathonStudy\\PreMarathon\\TempToSegment\\'
 #targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\MarathonStudy\\PostMarathon\\NotSegmented\\'
 targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\DixonFovOK\\'
-
-
+targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\DixonFovOkTLCCases2020\\'
+targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\ToSegment\\'
 # Look for the folders or shortcuts:
 files = os.listdir(targetPath)
 # It can be lnk with shortcuts or folders:
 extensionShortcuts = 'lnk'
 strForShortcut = '-> '
 extensionImages = 'mhd'
-tagSequence = '_I'#''_T1W'
+dixonTags = ("_I","_O","_W","_F")
+
 isDixon = True # If it's dixon uses dixon tissue segmenter to create a mask
+
+# Check what images are available, by looking at the in phase image.
+# Then I'll save only the basefilename, being that the full path + the first part of the name before the dixon tags.
 targetImagesNames = []
 for filename in files:
     name, extension = os.path.splitext(filename)
@@ -45,10 +50,10 @@ for filename in files:
     else:
         dataPath = targetPath + filename + '\\'
     # Check if the images are available:
-    filename = dataPath + 'ForLibrary\\' + name + tagSequence + '.' + extensionImages
+    filename = dataPath + 'ForLibrary\\' + name + dixonTags[0] + '.' + extensionImages
     if os.path.exists(filename):
         # Intensity image:
-        targetImagesNames.append(filename)
+        targetImagesNames.append(dataPath + 'ForLibrary\\' + name)
 
 print("Number of target images: {0}".format(len(targetImagesNames)))
 print("List of files: {0}\n".format(targetImagesNames))
@@ -59,7 +64,9 @@ libraryVersion = 'V1.3'
 libraryPath = 'D:\\Martin\\Segmentation\\AtlasLibrary\\' + libraryVersion + '\\NativeResolutionAndSize\\'
 
 # Segmentation type:
-regType = 'BSplineStandardGradDesc_NMI_2000iters_3000samples_15mm_RndSparseMask'#'NMI'
+regType = 'Parameters_BSpline_NMI_2000iters_2048samples'
+useMaskInReg = True
+#regType = 'BSplineStandardGradDesc_NMI_2000iters_3000samples_15mm_RndSparseMask'#'NMI'
 # Number of Atlases to select:
 numberOfSelectedAtlases = 5
 
@@ -69,21 +76,30 @@ numLabels = 11 # 10 for muscles and bone, and 11 for undecided
 
 ###################### OUTPUT #####################
 # Output path:
-baseOutputPath = 'D:\\MuscleSegmentationEvaluation\\SegmentationWithPython\\Marathon\\Pre\\' + libraryVersion + '\\Nonrigid{0}_N{1}_MaxProb_Mask\\'.format(regType, numberOfSelectedAtlases)
-#baseOutputPath = 'D:\\Martin\\Data\\MuscleSegmentation\\RNOH_TLC\\GoodToUse\\NotSegmented\\7362934\\Segmented\\' + libraryVersion + '\\Nonrigid{0}_N{1}_MaxProb_Mask\\'.format(regType, numberOfSelectedAtlases)
+baseOutputPath = 'D:\\MuscleSegmentationEvaluation\\SegmentationWithPython\\PluginTests\Plugin1.3\\' + libraryVersion + '\\N{0}_N{1}_mask{2}\\'.format(regType, numberOfSelectedAtlases, useMaskInReg)
 if not os.path.exists(baseOutputPath):
     os.makedirs(baseOutputPath)
 
 
-#targetImagesNames = targetImagesNames[8]
+#targetImagesNames = targetImagesNames[4:5]
 ##########################################################################################
 ################################### SEGMENT EACH IMAGE ###################################
 for targetFilename in targetImagesNames:
 
     ############################## MULTI-ATLAS SEGMENTATION ##################################
     ############## 0) TARGET IMAGE #############
-    # Read target image:
-    fixedImage = sitk.ReadImage(targetFilename)
+    # Read target image, which is the inphase dixon image. but also the other iamges are used in the tissue segmentation:
+    dixonImages = []
+    for i in range(0, len(dixonTags)):
+        # Read target image:
+        targetImageFilename =targetFilename + dixonTags[i] + ".mhd"
+        dixonImages.append(sitk.ReadImage(targetImageFilename))
+        if not USE_COSINES_AND_ORIGIN:
+            # Reset the origin and direction to defaults.
+            dixonImages[i].SetOrigin((0, 0, 0))
+            dixonImages[i].SetDirection((1, 0, 0, 0, 1, 0, 0, 0, 1))
+
+    fixedImage = dixonImages[0] # The in-phase image:
     # Cast the image as float:
     fixedImage = sitk.Cast(fixedImage, sitk.sitkFloat32)
     if not USE_COSINES_AND_ORIGIN:
@@ -92,9 +108,7 @@ for targetFilename in targetImagesNames:
 
     path, filename = os.path.split(targetFilename)
     nameFixed, extension = os.path.splitext(filename)
-    #nameCaseFixed = nameFixed
-    index_dash = nameFixed.index('_')
-    nameCaseFixed = nameFixed[:index_dash]
+    nameCaseFixed = nameFixed
 
     # Output path:
     outputPath = baseOutputPath + nameCaseFixed + "\\"
@@ -106,36 +120,13 @@ for targetFilename in targetImagesNames:
     #fixedImage = ApplyBiasCorrection(fixedImage, shrinkFactor)
 
     ############# 1) ATLAS LIBRARY ##############################
-    # To the function I just need to pass the folder name, but first we need to be sure
-    # that the atlas is not in the library folder:
-    backupFolder = libraryPath + "OutOfLibrary\\"
-    if not os.path.exists(backupFolder):
-        os.mkdir(backupFolder)
-    files = os.listdir(libraryPath)
-    extensionImages = 'mhd'
-    filesToMove = []
-    for filename in files:
-        if filename.startswith(nameCaseFixed):
-            # Add to files to move:
-            filesToMove.append(filename)
-    # Move the files for the atlas to the backupfolder:
-    for fileToMove in filesToMove:
-        os.rename(libraryPath + fileToMove, backupFolder + fileToMove)
+    # For this test, the atlas that is in the library is not removed.
 
     ############## 2) SOFT-TISSUE MASK ###########################
     # a) Any voxel greater than 0:
-    # softTissueMask = sitk.Equal(otsuImage, 1)
-    # b) Otsu
-    otsuImage = sitk.OtsuMultipleThresholds(fixedImage, 4, 0, 128, False) # 5 Classes, itk, doesn't coun't the background as a class, so we use 4 in the input parameters.
-    #if DEBUG:
-    #    sitk.WriteImage(otsuImage, outputPath + 'otsuMask.mhd')
-    softTissueMask = sitk.Or(sitk.Equal(otsuImage, 1), sitk.Equal(otsuImage, 2))
-    # Remove holes in it, using the background:
-    vectorRadius = (2, 2, 2)
-    kernel = sitk.sitkBall
-    background = sitk.BinaryMorphologicalOpening(sitk.Equal(otsuImage, 0), vectorRadius, kernel)
-    background = sitk.BinaryDilate(background, vectorRadius, kernel)
-    softTissueMask = sitk.And(softTissueMask, sitk.Not(background))
+    tissueSegmentedImage = DixonTissueSegmentation.DixonTissueSegmentation(dixonImages)
+    # Soft tissue mask is for segmentedImage == 1
+    softTissueMask = sitk.Equal(tissueSegmentedImage, 1)
     if DEBUG:
         sitk.WriteImage(softTissueMask, outputPath + 'softTissueMask.mhd', True)
     #   sitk.WriteImage(background, outputPath + 'background.mhd')
@@ -143,10 +134,5 @@ for targetFilename in targetImagesNames:
     sitkIm.CopyImageProperties(softTissueMask, fixedImage)
 
     ################ 3) CALL MULTI ATLAS SEGMENTATION #########################
-    MultiAtlasSegmentation(fixedImage, softTissueMask, libraryPath, outputPath, DEBUG, numSelectedAtlases=numberOfSelectedAtlases, paramFileBspline = regType)
+    MultiAtlasSegmentation(fixedImage, softTissueMask, libraryPath, outputPath, DEBUG, numSelectedAtlases=numberOfSelectedAtlases, paramFileBspline = regType, maskedRegistration=useMaskInReg)
 
-    ########################################################################
-    ##### MOVE BACK FILES
-    # Move the files for the atlas to the backupfolder:
-    for fileToMove in filesToMove:
-        os.rename(backupFolder + fileToMove, libraryPath + fileToMove)

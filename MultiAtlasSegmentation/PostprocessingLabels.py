@@ -5,7 +5,6 @@ from __future__ import print_function
 
 import SimpleITK as sitk
 import numpy as np
-import NormalizedCrossCorrelationMetrics as NCC
 import sys
 import os
 
@@ -76,7 +75,32 @@ def FilterUnconnectedRegionsPerSlices(segmentedImage, numLabels):
             maskFilter.SetOutsideValue(i+1)
             outSlice = maskFilter.Execute(outSlice, maskThisLabel)
             # Now paste the slice in the output:
-            outSlice = sitk.JoinSeries(outSlice) # Needs tobe a 3D image
+            outSlice = sitk.JoinSeries(outSlice) # Needs to be a 3D image
             outSegmentedImage = sitk.Paste(outSegmentedImage, outSlice, outSlice.GetSize(), destinationIndex=[0, 0, j])
 
     return outSegmentedImage
+
+
+########################## FUNCTION THAT MERGES TISSUE SEGMENTED WITH LABELS SEGMENTED IMAGES ###################
+def MergeTissueAndLabelsImages(dixonTissuesImage, muscleLabelsImage):
+    numTissues = 3
+    numLabels = 11
+    # The tissue segmented images have as labels softTissue = 1, Mixed = 2, Fat = 3.
+    # The muscle labels have labels from 1 to 11, being 9 and 10 femur labels and 11 undecided.
+    # We will create an image with labels from 1 to 8 and then softTissueOutOfLabels=12 Mixed=13, Fat=14
+    outputImage = sitk.Image(muscleLabelsImage.GetSize(), sitk.sitkUInt8)
+    outputImage.CopyInformation(muscleLabelsImage)
+    # First the tissue images:
+    for i in range(1,numTissues+1):
+        maskFilter = sitk.MaskImageFilter()
+        maskFilter.SetMaskingValue(i)
+        maskFilter.SetOutsideValue(numLabels + i)
+        outputImage = maskFilter.Execute(outputImage, dixonTissuesImage)
+    # Now the muscle labels # TODO: apply soft tissue mask to the labels.
+    for i in range(1,numLabels+1):
+        maskFilter = sitk.MaskImageFilter()
+        maskFilter.SetMaskingValue(i)
+        maskFilter.SetOutsideValue(i)
+        outputImage = maskFilter.Execute(outputImage, muscleLabelsImage)
+
+    return outputImage

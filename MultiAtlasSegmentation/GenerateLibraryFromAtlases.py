@@ -19,9 +19,10 @@ USE_COSINES_AND_ORIGIN = 1
 
 ############################### LIBRARY ATLASES, CONFIGURATION, ETC FOR THIS VERSION ###################################
 dataPath = 'D:\\Martin\\Data\\MuscleSegmentation\\' # Base data path.
-libraryVersion = 'V1.2'
+libraryVersion = 'V1.3.1'
+referenceCase = 'ID00052'
 atlasesPath = dataPath + 'Library' + libraryVersion + '\\'
-cropAtLesserTrochanter = False # Flag to indicate if a cropping at the level of the lesser trochanter is done to
+cropAtLesserTrochanter = True # Flag to indicate if a cropping at the level of the lesser trochanter is done to
                                 # homogeneize the field of view.
 
 # Get the atlases names and files:
@@ -111,6 +112,7 @@ paramFileAffine = 'Parameters_Affine_' + similarityMetricForReg
 
 ############################# USE ONE CASE AS A REFERENCE FOR THE REGISTRATION #####################
 indexReference = 5#len(atlasNames) - 2
+indexReference = atlasNames.index(referenceCase)
 print("Case use as a reference for the registration: {0}\n".format(atlasNames[indexReference]))
 refAtlasImage = sitk.ReadImage(atlasImageFilenames[indexReference])
 
@@ -177,23 +179,23 @@ for i in range(0, len(atlasNames)):
     sitk.WriteImage(atlasLabels, rigidLibraryPath + atlasNames[i] + tagLabels + '.' + extensionImages)
 
     ############### 2) AFFINE REGISTRATION ########################
-#    parameterMapVector.append(elastixImageFilter.ReadParameterFile(parameterFilesPath
-#                                                                   + paramFileAffine + '.txt'))
-#    elastixImageFilter.SetFixedImage(refAtlasImage)
-#    elastixImageFilter.SetMovingImage(atlasImage)
-#    elastixImageFilter.SetParameterMap(parameterMapVector)
-#    elastixImageFilter.Execute()
-#    # Get result and apply transform to labels:
-#    # Get the images:
-#    atlasImage = elastixImageFilter.GetResultImage()
-#    # Apply transform:
-#    transformixImageFilter = sitk.TransformixImageFilter()
-#    transformixImageFilter.SetMovingImage(atlasLabels)
-#    transformixImageFilter.SetTransformParameterMap(elastixImageFilter.GetTransformParameterMap())
-#    transformixImageFilter.SetTransformParameter("FinalBSplineInterpolationOrder", "0")
-#    transformixImageFilter.SetTransformParameter("ResultImagePixelType", "unsigned char")
-#    transformixImageFilter.Execute()
-#    atlasLabels = sitk.Cast(transformixImageFilter.GetResultImage(), sitk.sitkUInt8)
-#    # Write image in the raw folder:
-#    sitk.WriteImage(atlasImage, affineLibraryPath + atlasNames[i] + '.' + extensionImages)
-#    sitk.WriteImage(atlasLabels, affineLibraryPath + atlasNames[i] + tagLabels + '.' + extensionImages)
+    parameterMapVector.append(elastixImageFilter.ReadParameterFile(parameterFilesPath
+                                                                  + paramFileAffine + '.txt'))
+    elastixImageFilter.SetFixedImage(refAtlasImage)
+    elastixImageFilter.SetMovingImage(atlasImage)
+    elastixImageFilter.SetParameterMap(parameterMapVector)
+    elastixImageFilter.Execute()
+    # Get result and apply transform to labels:
+    # Get the images:
+    atlasImage = elastixImageFilter.GetResultImage()
+    # Apply transform:
+    transformixImageFilter = sitk.TransformixImageFilter()
+    transformixImageFilter.SetMovingImage(atlasLabels)
+    transformixImageFilter.SetTransformParameterMap(elastixImageFilter.GetTransformParameterMap())
+    transformixImageFilter.SetTransformParameter("FinalBSplineInterpolationOrder", "0")
+    transformixImageFilter.SetTransformParameter("ResultImagePixelType", "unsigned char")
+    transformixImageFilter.Execute()
+    atlasLabels = sitk.Cast(transformixImageFilter.GetResultImage(), sitk.sitkUInt8)
+    # Write image in the raw folder:
+    sitk.WriteImage(atlasImage, affineLibraryPath + atlasNames[i] + '.' + extensionImages)
+    sitk.WriteImage(atlasLabels, affineLibraryPath + atlasNames[i] + tagLabels + '.' + extensionImages)

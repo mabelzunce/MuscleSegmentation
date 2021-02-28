@@ -35,3 +35,28 @@ def SetUndecidedVoxelsUsingDistances(segmentedImage, numLabels):
     segmentedImageFilled = sitk.GetImageFromArray(ndaSegmentedImage)
     segmentedImageFilled.CopyInformation(segmentedImage)
     return segmentedImageFilled
+
+
+def GetProbailityMapsFromSegmentedImages(listOfImages, numLabels):
+    # Then obtain the probability maps and do the majority voting:
+    probImagesPerLabel = list()
+    # The background I count it as a label in the voting, so numLabels+1
+    for i in range(0, numLabels + 1):
+        probImageThisLabel = sitk.Image(listOfImages[0].GetSize(), sitk.sitkFloat32)
+        probImageThisLabel.CopyInformation(listOfImages[0])
+        for j in range(0, len(listOfImages)):
+            labelsImage = listOfImages[j]
+            # Get the mask for this label and atlas:
+            weightsThisLabel = sitk.Image(listOfImages[0].GetSize(), sitk.sitkFloat32)
+            weightsThisLabel.CopyInformation(listOfImages[0])
+            maskFilter = sitk.MaskImageFilter()
+            maskFilter.SetMaskingValue(i)
+            maskFilter.SetOutsideValue(1) # Weight equally each image
+            weightsThisLabel = maskFilter.Execute(weightsThisLabel, labelsImage)
+            # Now add the weights:
+            probImageThisLabel = sitk.Add(probImageThisLabel, weightsThisLabel)
+        probImageThisLabel = sitk.Divide(probImageThisLabel, len(listOfImages))
+        # Normalize, in order to be able to do dynamic labeling:
+        probImagesPerLabel.append(probImageThisLabel)
+
+    return probImagesPerLabel

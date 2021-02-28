@@ -22,7 +22,7 @@ USE_COSINES_AND_ORIGIN = 1
 # named "ForLibrary" with the dixon images called "case_I, case_O, case_W, case_F".
 targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\MarathonStudy\\PreMarathon\\TempToSegment\\'
 #targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\MarathonStudy\\PostMarathon\\NotSegmented\\'
-#targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\RNOH_TLC\\GoodToUse\\NotSegmented\\7362934\\'
+targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\DixonFovOK\\'
 
 
 # Look for the folders or shortcuts:
@@ -32,6 +32,7 @@ extensionShortcuts = 'lnk'
 strForShortcut = '-> '
 extensionImages = 'mhd'
 tagSequence = '_I'#''_T1W'
+isDixon = True # If it's dixon uses dixon tissue segmenter to create a mask
 targetImagesNames = []
 for filename in files:
     name, extension = os.path.splitext(filename)
@@ -53,7 +54,7 @@ print("Number of target images: {0}".format(len(targetImagesNames)))
 print("List of files: {0}\n".format(targetImagesNames))
 
 ############################## MULTI-ATLAS SEGMENTATION PARAMETERS ######################
-libraryVersion = 'V1.2'
+libraryVersion = 'V1.3'
 # Library path:
 libraryPath = 'D:\\Martin\\Segmentation\\AtlasLibrary\\' + libraryVersion + '\\NativeResolutionAndSize\\'
 

@@ -3,6 +3,16 @@ import SimpleITK as sitk
 import PostprocessingLabels
 import numpy as np
 
+# Auxiliary function that fill hole in an image but per each slice:
+def BinaryFillHolePerSlice(input):
+    output = input
+    for j in range(0, input.GetSize()[2]):
+        slice = input[:,:,j]
+        slice = sitk.BinaryFillhole(slice, False)
+        # Now paste the slice in the output:
+        slice = sitk.JoinSeries(slice) # Needs tobe a 3D image
+        output = sitk.Paste(output, slice, slice.GetSize(), destinationIndex=[0, 0, j])
+    return output
 
 # DixonTissueSegmentation received the four dixon images in the following order: in-phase, out-of-phase, water, fat.
 # Returns a labelled image into 4 tissue types: air-background (0), soft-tissue (1), soft-tissue/fat (2), fat (3)
@@ -75,26 +85,51 @@ def DixonTissueSegmentation(dixonImages):
 
 # gets the skin fat from a dixon segmented image, which consists of dixonSegmentedImage (0=air, 1=muscle, 2=muscle/fat,
 # 3=fat)
-def GetSkinFatFromTissueSegmentedImage(dixonSegmentedImage):
+def GetSkinFatFromTissueSegmentedImage(dixonSegmentedImage, thresholdIterations = 5):
     # Inital skin image:
     skinFat = dixonSegmentedImage == 3
-    skinFat = PostprocessingLabels.FilterUnconnectedRegionsPerSlices(skinFat, 1)
+    #skinFat = PostprocessingLabels.FilterUnconnectedRegionsPerSlices(skinFat, 1)
     # Body image:
     bodyMask = dixonSegmentedImage > 0
+    bodyMask = BinaryFillHolePerSlice(bodyMask)
     # Create a mask for other tissue:
-    notFatMask = dixonSegmentedImage == 1 # Exclude fat
-    # Start eroding body mask to remove skin fat (which would icnrease dice between the eroded mask and the other soft
-    # tissue mask) until the dice score starts decreasing.
-    overlap_measures_filter = sitk.LabelOverlapMeasuresImageFilter()
-    overlap_measures_filter.SetGlobalDefaultCoordinateTolerance(1e-2)
-    while True:
-        # Erode:
-        bodyMask = sitk.Erode(bodyMask)
-        # Check overlap with fat until reaches a threshold:
-        sitk.And(bodyMask, skinFat)
-        overlap_measures_filter.Execute(bodyMask, notFatMask)
-        jaccard.append(overlap_measures_filter.GetJaccardCoefficient())
-        dice.append(overlap_measures_filter.GetDiceCoefficient())
+    notFatMask = dixonSegmentedImage == 1 # Exclude mixed fat label
+    # To get the skin fat, I work each slice separately:
+    for j in range(0, skinFat.GetSize()[2]):
+        sliceFat = skinFat[:, :, j]
+        sliceNotFat = notFatMask[:,:,j]
+        sliceBodyMask = bodyMask[:, :, j]
+        # Start eroding body mask to remove skin fat (which would icnrease dice between the eroded mask and the other soft
+        # tissue mask) until the dice score starts decreasing.
+        overlap_measures_filter = sitk.LabelOverlapMeasuresImageFilter()
+        overlap_measures_filter.SetGlobalDefaultCoordinateTolerance(1e-2)
+        numIterDiceDecreasing = 0
+        metricPrev = 0.001
+        shapeStatisticFilter = sitk.LabelShapeStatisticsImageFilter()
+        areaBodyMask = 1e10
+        while (numIterDiceDecreasing <= thresholdIterations) and (areaBodyMask>0):
+            # Erode:
+            sliceBodyMask = sitk.BinaryErode(sliceBodyMask,3)
+            shapeStatisticFilter.Execute(sliceBodyMask)
+            
+            if shapeStatisticFilter.GetNumberOfLabels() < 1:
+                break
+            areaBodyMask = shapeStatisticFilter.GetNumberOfPixels(1)
+            # Check overlap with fat until reaches a threshold:
+            overlap_measures_filter.Execute(sliceBodyMask, sliceNotFat)
+            # Which metric is better?:
+            metric = overlap_measures_filter.GetDiceCoefficient()
+            #metric = overlap_measures_filter.GetFalseNegativeError()
+            if metric < metricPrev:
+                numIterDiceDecreasing+=1
+            else:
+                numIterDiceDecreasing = 0
+            metricPrev = metric
+        # Now for the skin fat, mask the fat with the negated bodyMask:
+        sliceFat = sitk.And(sliceFat, sitk.Not(sliceBodyMask))
+        # Now paste the slice in the output:
+        sliceFat = sitk.JoinSeries(sliceFat)  # Needs tobe a 3D image
+        skinFat = sitk.Paste(skinFat, sliceFat, sliceFat.GetSize(), destinationIndex=[0, 0, j])
     return skinFat
 
 # Function that creates a mask for the body from an in-phase dixon image. It uses an Otsu thresholding and morphological operations
@@ -111,12 +146,7 @@ def GetBodyMaskFromInPhaseDixon(inPhaseImage, vectorRadius = (2,2,2)):
     # Fill holes:
     #bodyMask = sitk.BinaryFillhole(bodyMask, False)
     # Fill holes in 2D (to avoid holes coming from bottom and going up):
-    for j in range(0, bodyMask.GetSize()[2]):
-        slice = bodyMask[:,:,j]
-        slice = sitk.BinaryFillhole(slice, False)
-        # Now paste the slice in the output:
-        slice = sitk.JoinSeries(slice) # Needs tobe a 3D image
-        bodyMask = sitk.Paste(bodyMask, slice, slice.GetSize(), destinationIndex=[0, 0, j])
+    bodyMask = BinaryFillHolePerSlice(bodyMask)
 
     return bodyMask
 

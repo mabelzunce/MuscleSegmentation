@@ -59,7 +59,7 @@ def RoiNormalizedCrossCorrelationAsInITK(image1, image2, roiMask):
     lncc = 0
     # Mask each image:
     maskImageFilter = sitk.MaskImageFilter()
-    maskImageFilter.SetGlobalDefaultCoordinateTolerance(1e-3)
+    maskImageFilter.SetGlobalDefaultCoordinateTolerance(1e-2)
     maskImageFilter.SetOutsideValue(0)
     image1_roi = maskImageFilter.Execute(image1, roiMask)
     image2_roi = maskImageFilter.Execute(image2, roiMask)

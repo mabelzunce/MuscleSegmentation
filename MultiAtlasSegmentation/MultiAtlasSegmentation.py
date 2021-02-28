@@ -113,7 +113,7 @@ def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath,
         if maskedRegistration:
             maskMoving = DixonTissueSeg.GetBodyMaskFromInPhaseDixon(movingImage)
             elastixImageFilter.SetFixedMask(maskTarget)
-            elastixImageFilter.SetMovingMask(maskMoving)
+            #elastixImageFilter.SetMovingMask(maskMoving)
 
         elastixImageFilter.LogToFileOn()
         elastixImageFilter.SetOutputDirectory(tempPath)
@@ -137,7 +137,7 @@ def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath,
         imRegMethod.SetMetricAsCorrelation()
         if maskedRegistration:
             imRegMethod.SetMetricFixedMask(maskTarget)
-            imRegMethod.SetMetricMovingMask(maskMoving)
+            #imRegMethod.SetMetricMovingMask(maskMoving)
         metricValue = imRegMethod.MetricEvaluate(targetImage, registeredImages[i])
         # metricValue = sitk.NormalizedCorrelation(registeredImages[i], mask, targetImage) # Is not working
         similarityValue.append(metricValue)
@@ -147,8 +147,9 @@ def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath,
         if debug:
             outputFilename = outputPath + '\\' + nameMoving + '_to_target' + '.mhd'
             sitk.WriteImage(registeredImages[i], outputFilename, True)
-            outputFilename = outputPath + '\\' + nameMoving + '_mask' + '.mhd'
-            sitk.WriteImage(maskMoving, outputFilename, True)
+            if maskedRegistration:
+                outputFilename = outputPath + '\\' + nameMoving + '_mask' + '.mhd'
+                sitk.WriteImage(maskMoving, outputFilename, True)
     ###########################################
 
     #################### 3) ATLAS SELECTION #################################
