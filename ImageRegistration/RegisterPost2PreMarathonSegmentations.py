@@ -19,8 +19,8 @@ USE_COSINES_AND_ORIGIN = 1
 ############################### PATHS AND CASES TO SEGMENT #######################################
 postMarathonPath = 'D:\\Martin\\Data\\MuscleSegmentation\\MarathonStudy\\PostMarathon\\' # Base data path.
 preMarathonPath = 'D:\\Martin\\Data\\MuscleSegmentation\\MarathonStudy\\PreMarathon\\' # Base data path.
-subFolderPost = 'Segmented\\'
-subFolderPre = 'Segmented\\'
+subFolderPost = 'AllWithLinks\\'
+subFolderPre = 'AllWithLinks\\'
 cropAtLesserTrochanter = False # Flag to indicate if a cropping at the level of the lesser trochanter is done to
                                 # homogeneize the field of view.
 

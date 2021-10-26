@@ -28,8 +28,8 @@ targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\MarathonStudy\\PreMarathon\\
 #targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\DixonFovOkTLCCases2020\\'
 
 
-subFolder = '\\ForLibraryNoCropping\\'
-#subFolder = '\\ForLibrary\\'
+#subFolder = '\\ForLibraryNoCropping\\'
+subFolder = '\\ForLibrary\\'
 
 # Look for the folders or shortcuts:
 files = os.listdir(targetPath)
@@ -41,10 +41,13 @@ inPhaseSuffix = '_I'#
 outOfPhaseSuffix = '_O'#
 waterSuffix = '_W'#
 fatSuffix = '_F'#
-suffixSegmentedImages = '_tissue_segmented'
+t1wSuffix = '_T1W'#
+suffixOutputImages = '_bias'
 suffixSkinFatImages = '_skin_fat'
 suffixFatFractionImages = '_fat_fraction'
-dixonSuffixInOrder = (inPhaseSuffix, outOfPhaseSuffix, waterSuffix, fatSuffix)
+typeOfImagesToCorrect = [t1wSuffix]
+shrinkFactor = (2,2,2)
+
 for filename in files:
     dixonImages = []
     name, extension = os.path.splitext(filename)
@@ -62,22 +65,13 @@ for filename in files:
         # Process this image:
         print('Image to be processed: {0}\n'.format(name))
         # Add images in order:
-        for suffix in dixonSuffixInOrder:
+        for suffix in typeOfImagesToCorrect:
             filename = dataPath + subFolder + name + suffix + '.' + extensionImages
-            dixonImages.append(sitk.Cast(sitk.ReadImage(filename), sitk.sitkFloat32))
-        
-        # Generate teh Dixon tissue image:
-        segmentedImage = DixonTissueSegmentation.DixonTissueSegmentation(dixonImages)
-        # Write image:
-        sitk.WriteImage(segmentedImage, dataPath + 'ForLibrary\\' + name + suffixSegmentedImages + '.' + extensionImages, True)
+            # readImage:
+            inputImage = sitk.Cast(sitk.ReadImage(filename), sitk.sitkFloat32)
+            # Apply bias correction:
+            outputImage = ApplyBiasCorrection(inputImage, shrinkFactor)
+            # Write image:
+            sitk.WriteImage(outputImage, dataPath + subFolder + name + suffix + suffixOutputImages + '.' + extensionImages, False) # Compression not working when reading from matlab.
 
-        # Now create a skin fat mask:
-        #skinFat = DixonTissueSegmentation.GetSkinFatFromTissueSegmentedImage(segmentedImage)
-        #sitk.WriteImage(skinFat,
-        #                dataPath + 'ForLibrary\\' + name + suffixSkinFatImages + '.' + extensionImages, True)
-        
-        # Also create a fat fraction image:
-        fatFraction = sitk.Divide(dixonImages[3], sitk.Add(sitk.Add(dixonImages[2], dixonImages[3]), 1e-5))
-        sitk.WriteImage(fatFraction,
-                        dataPath + 'ForLibrary\\' + name + suffixFatFractionImages + '.' + extensionImages, True)
 

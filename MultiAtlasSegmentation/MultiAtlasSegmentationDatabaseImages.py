@@ -13,7 +13,7 @@ import sys
 import os
 
 ############################### CONFIGURATION #####################################
-DEBUG = 1 # In debug mode, all the intermediate iamges are written.
+DEBUG = 0 # In debug mode, all the intermediate iamges are written.
 USE_COSINES_AND_ORIGIN = 1
 
 ############################### TARGET FOLDER ###################################
@@ -23,7 +23,7 @@ USE_COSINES_AND_ORIGIN = 1
 targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\MarathonStudy\\PreMarathon\\TempToSegment\\'
 #targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\MarathonStudy\\PostMarathon\\NotSegmented\\'
 targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\DixonFovOK\\'
-
+targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\MarathonStudy\\PreMarathon\\NotSegmented\\'
 
 # Look for the folders or shortcuts:
 files = os.listdir(targetPath)
@@ -75,7 +75,7 @@ if not os.path.exists(baseOutputPath):
     os.makedirs(baseOutputPath)
 
 
-#targetImagesNames = targetImagesNames[8]
+targetImagesNames = targetImagesNames[2:]
 ##########################################################################################
 ################################### SEGMENT EACH IMAGE ###################################
 for targetFilename in targetImagesNames:

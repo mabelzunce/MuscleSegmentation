@@ -2,10 +2,10 @@
 import SimpleITK as sitk
 import numpy as np
 
-def ApplyBiasCorrection(inputImage, shrinkFactor):
+def ApplyBiasCorrection(inputImage, shrinkFactor = (1,1,1)):
     # Bias correction filter:
     biasFieldCorrFilter = sitk.N4BiasFieldCorrectionImageFilter()
-    mask = sitk.OtsuThreshold(inputImage, 0, 1, 200)
+    mask = sitk.OtsuThreshold( inputImage, 0, 1, 100)
     inputImage = sitk.Cast(inputImage, sitk.sitkFloat32)
 
     # Parameter for the bias corredtion filter:

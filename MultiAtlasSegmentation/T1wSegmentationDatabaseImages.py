@@ -22,7 +22,7 @@ USE_COSINES_AND_ORIGIN = 1
 # folders with the case name should be found. Inside each case folder there must be a subfolder
 # named "ForLibrary" with the dixon images called "case_I, case_O, case_W, case_F".
 targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\MarathonStudy\\PreMarathon\\AllWithLinks\\'
-targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\MarathonStudy\\PostMarathon\\AllWithLinks\\'
+#targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\MarathonStudy\\PostMarathon\\AllWithLinks\\'
 #targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\MarathonStudy\\PostMarathon\\NotSegmented\\'
 #targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\DixonFovOK\\'
 
@@ -37,6 +37,10 @@ inPhaseSuffix = '_I'#
 outOfPhaseSuffix = '_O'#
 waterSuffix = '_W'#
 fatSuffix = '_F'#
+t1wSuffix = '_T1W'#
+# Output suffixes:
+outputSubfolder = "T1wProcessing"
+t1wBiasSuffix = '_T1W_bias'#
 suffixSegmentedImages = '_tissue_segmented'
 suffixSkinFatImages = '_skin_fat'
 suffixFatFractionImages = '_fat_fraction'
@@ -53,27 +57,42 @@ for filename in files:
     else:
         dataPath = targetPath + filename + '\\'
     # Check if the images are available:
-    filename = dataPath + 'ForLibrary\\' + name + inPhaseSuffix + '.' + extensionImages
+    filename = dataPath + 'ForLibrary\\' + name + t1wSuffix + '.' + extensionImages
     if os.path.exists(filename):
         # Process this image:
         print('Image to be processed: {0}\n'.format(name))
-        # Add images in order:
-        for suffix in dixonSuffixInOrder:
-            filename = dataPath + 'ForLibrary\\' + name + suffix + '.' + extensionImages
-            dixonImages.append(sitk.Cast(sitk.ReadImage(filename), sitk.sitkFloat32))
-        
-        # Generate teh Dixon tissue image:
-        segmentedImage = DixonTissueSegmentation.DixonTissueSegmentation(dixonImages)
-        # Write image:
-        sitk.WriteImage(segmentedImage, dataPath + 'ForLibrary\\' + name + suffixSegmentedImages + '.' + extensionImages, True)
+        # Create output folder:
+        outputPath = dataPath + 'ForLibrary\\' + outputSubfolder + "\\"
+        if not os.path.exists(outputPath):
+            os.makedirs(outputPath)
+        ## Add images in order:
+        #for suffix in dixonSuffixInOrder:
+        #    filename = dataPath + 'ForLibrary\\' + name + suffix + '.' + extensionImages
+        #    dixonImages.append(sitk.Cast(sitk.ReadImage(filename), sitk.sitkFloat32))
 
-        # Now create a skin fat mask:
-        #skinFat = DixonTissueSegmentation.GetSkinFatFromTissueSegmentedImage(segmentedImage)
-        #sitk.WriteImage(skinFat,
-        #                dataPath + 'ForLibrary\\' + name + suffixSkinFatImages + '.' + extensionImages, True)
-        
-        # Also create a fat fraction image:
-        fatFraction = sitk.Divide(dixonImages[3], sitk.Add(sitk.Add(dixonImages[2], dixonImages[3]), 1e-5))
-        sitk.WriteImage(fatFraction,
-                        dataPath + 'ForLibrary\\' + name + suffixFatFractionImages + '.' + extensionImages, True)
+        # Read T1-weighted image:
+        t1wImage = sitk.Cast(sitk.ReadImage(filename), sitk.sitkFloat32)
+        # Apply bias correction:
+        shrinkFactor = (2, 2, 1)  # Having problems otherwise:
+        t1wImage = ApplyBiasCorrection(t1wImage, shrinkFactor)
+        # Write it:
+        sitk.WriteImage(t1wImage, outputPath + name + t1wBiasSuffix + '.' + extensionImages, True)
+        # Generate segmented image:
+        otsuImage = sitk.OtsuMultipleThresholds(t1wImage, 3, 0, 128,
+                                                False)  # 5 Classes, itk, doesn't coun't the background as a class, so we use 4 in the input parameters.
+        muscleTissueMask = sitk.Equal(otsuImage, 1)
+        fatTissueMask = sitk.Equal(otsuImage, 2)
+        # Remove holes in it, using the background:
+        vectorRadius = (2, 2, 2)
+        kernel = sitk.sitkBall
+        fatTissueMask = sitk.BinaryMorphologicalOpening(fatTissueMask, vectorRadius, kernel)
+        fatTissueMask = sitk.BinaryDilate(fatTissueMask, vectorRadius, kernel)
+
+        # Write images:
+        sitk.WriteImage(otsuImage, outputPath + name + t1wBiasSuffix + '_otsu.' + extensionImages, True)
+        sitk.WriteImage(muscleTissueMask, outputPath + name + t1wBiasSuffix + '_muscle.' + extensionImages,
+                        True)
+        sitk.WriteImage(fatTissueMask, outputPath + name + t1wBiasSuffix + '_fat.' + extensionImages,
+                        True)
+
 

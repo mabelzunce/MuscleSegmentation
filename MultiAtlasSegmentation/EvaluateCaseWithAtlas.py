@@ -18,11 +18,13 @@ import MajorityVoting as MV
 from PostprocessingLabels import MergeTissueAndLabelsImages
 ############################### REFERENCE CASE AND FOLDER WITH ALL CASES ###################################
 debug = 0
-caseToProcess = 'ID00011'
+caseToProcess = 'ID00003'
 atlasName = 'ID00003'
 atlasPath = 'D:\\Martin\\MarathonStudy\\NormativeValues\\Shape\\' + atlasName + '\\Women\\Parameters_BSpline_NCC_2000iters_2048samples\\'
 targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\MarathonStudy\\PreMarathon\\AllWithLinks\\'
 targetAutomatedSegmentationPath = 'D:\\MuscleSegmentationEvaluation\\SegmentationWithPython\\Marathon\\Pre\\V1.1\\NonrigidNCC_1000_2048_N5_MaxProb_Mask\\'
+targetAutomatedSegmentationPath = 'D:\\MuscleSegmentationEvaluation\\SegmentationWithPython\\Marathon\\Pre\\V1.3\\NonrigidBSplineStandardGradDesc_NMI_2000iters_3000samples_15mm_RndSparseMask_N5_MaxProb_Mask\\'
+
 outputPath = atlasPath + 'EvaluationOf' + caseToProcess + '\\' 
 if not os.path.exists(outputPath):
     os.makedirs(outputPath)
@@ -62,7 +64,7 @@ dataPath = shortcut.as_string()[indexStart+len(strForShortcut):] + '\\'
 filename = dataPath + '\\' + 'ForLibrary\\' + caseToProcess + suffixSegmentedImages + extensionImages
 filenameFatFraction = dataPath + '\\' + 'ForLibrary\\' + caseToProcess + suffixFatFractionImages + extensionImages
 filenameLabels = dataPath + '\\' + 'ForLibrary\\' + caseToProcess + suffixManualMuscleLabels + extensionImages
-if not os.path.exists(filename):
+if not os.path.exists(filenameLabels):
     # Check in the automated folder:
     filenameLabels = targetAutomatedSegmentationPath + caseToProcess + '\\' + nameMuscleSegmentedImages + suffixMuscleSegmentedImages + extensionImages
     if not os.path.exists(filenameLabels):

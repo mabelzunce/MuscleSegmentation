@@ -16,7 +16,7 @@ import DixonTissueSegmentation
 ############################### CONFIGURATION #####################################
 DEBUG = 0 # In debug mode, all the intermediate iamges are written.
 USE_COSINES_AND_ORIGIN = 1
-
+OVERWRITE_EXISTING_SEGMENTATIONS = 0
 ############################### TARGET FOLDER ###################################
 # The target is the folder where the MRI images to be processed are. In the folder only
 # folders with the case name should be found. Inside each case folder there must be a subfolder
@@ -26,6 +26,7 @@ targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\MarathonStudy\\PreMarathon\\
 targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\DixonFovOK\\'
 targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\DixonFovOkTLCCases2020\\'
 targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\ToSegment\\'
+targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\MuscleStudyHipSpine\\CouchTo5kStudy\\'
 # Look for the folders or shortcuts:
 files = os.listdir(targetPath)
 # It can be lnk with shortcuts or folders:
@@ -33,9 +34,28 @@ extensionShortcuts = 'lnk'
 strForShortcut = '-> '
 extensionImages = 'mhd'
 dixonTags = ("_I","_O","_W","_F")
-
+segmentedImageName = "segmentedImage"
 isDixon = True # If it's dixon uses dixon tissue segmenter to create a mask
 
+############################## MULTI-ATLAS SEGMENTATION PARAMETERS ######################
+libraryVersion = 'V1.3'
+# Library path:
+libraryPath = 'D:\\Martin\\Segmentation\\AtlasLibrary\\' + libraryVersion + '\\NativeResolutionAndSize\\'
+
+# Segmentation type:
+regType = 'Parameters_BSpline_NMI_2000iters_2048samples'
+useMaskInReg = True
+#regType = 'BSplineStandardGradDesc_NMI_2000iters_3000samples_15mm_RndSparseMask'#'NMI'
+# Number of Atlases to select:
+numberOfSelectedAtlases = 5
+
+###################### OUTPUT #####################
+# Output path:
+baseOutputPath = 'D:\\MuscleSegmentationEvaluation\\SegmentationWithPython\\CouchTo5k\\Plugin1.3\\' + libraryVersion + '\\N{0}_N{1}_mask{2}\\'.format(regType, numberOfSelectedAtlases, useMaskInReg)
+if not os.path.exists(baseOutputPath):
+    os.makedirs(baseOutputPath)
+
+################## CASES TO SEGMENTE######
 # Check what images are available, by looking at the in phase image.
 # Then I'll save only the basefilename, being that the full path + the first part of the name before the dixon tags.
 targetImagesNames = []
@@ -51,34 +71,24 @@ for filename in files:
         dataPath = targetPath + filename + '\\'
     # Check if the images are available:
     filename = dataPath + 'ForLibrary\\' + name + dixonTags[0] + '.' + extensionImages
-    if os.path.exists(filename):
-        # Intensity image:
-        targetImagesNames.append(dataPath + 'ForLibrary\\' + name)
+    if not OVERWRITE_EXISTING_SEGMENTATIONS:
+        # if not overwrite, check if the segmentation is already available:
+        outputFilename = baseOutputPath + name + "\\" + segmentedImageName + "." + extensionImages
+        if os.path.exists(filename) and not os.path.exists(outputFilename):
+            # Intensity image:
+            targetImagesNames.append(dataPath + 'ForLibrary\\' + name)
+    else:
+        if os.path.exists(filename):
+            # Intensity image:
+            targetImagesNames.append(dataPath + 'ForLibrary\\' + name)
 
 print("Number of target images: {0}".format(len(targetImagesNames)))
 print("List of files: {0}\n".format(targetImagesNames))
 
-############################## MULTI-ATLAS SEGMENTATION PARAMETERS ######################
-libraryVersion = 'V1.3'
-# Library path:
-libraryPath = 'D:\\Martin\\Segmentation\\AtlasLibrary\\' + libraryVersion + '\\NativeResolutionAndSize\\'
-
-# Segmentation type:
-regType = 'Parameters_BSpline_NMI_2000iters_2048samples'
-useMaskInReg = True
-#regType = 'BSplineStandardGradDesc_NMI_2000iters_3000samples_15mm_RndSparseMask'#'NMI'
-# Number of Atlases to select:
-numberOfSelectedAtlases = 5
 
 # Labels:
 numLabels = 11 # 10 for muscles and bone, and 11 for undecided
 ##########################################################################################
-
-###################### OUTPUT #####################
-# Output path:
-baseOutputPath = 'D:\\MuscleSegmentationEvaluation\\SegmentationWithPython\\PluginTests\Plugin1.3\\' + libraryVersion + '\\N{0}_N{1}_mask{2}\\'.format(regType, numberOfSelectedAtlases, useMaskInReg)
-if not os.path.exists(baseOutputPath):
-    os.makedirs(baseOutputPath)
 
 
 #targetImagesNames = targetImagesNames[4:5]
@@ -117,7 +127,7 @@ for targetFilename in targetImagesNames:
 
     # Apply bias correction:
     shrinkFactor = (2,2,1) # Having problems otherwise:
-    #fixedImage = ApplyBiasCorrection(fixedImage, shrinkFactor)
+    fixedImage = ApplyBiasCorrection(fixedImage, shrinkFactor)
 
     ############# 1) ATLAS LIBRARY ##############################
     # For this test, the atlas that is in the library is not removed.
