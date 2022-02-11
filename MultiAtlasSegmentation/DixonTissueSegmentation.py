@@ -132,6 +132,25 @@ def GetSkinFatFromTissueSegmentedImage(dixonSegmentedImage, thresholdIterations 
         skinFat = sitk.Paste(skinFat, sliceFat, sliceFat.GetSize(), destinationIndex=[0, 0, j])
     return skinFat
 
+
+# gets the skin fat from a dixon segmented image, which consists of dixonSegmentedImage (0=air, 1=muscle, 2=muscle/fat,
+# 3=fat)
+def GetMuscleMaskFromTissueSegmentedImage(dixonSegmentedImage, vectorRadius = (2,2,2)):
+    # Inital muscle image. It is a conservative image as we consider the muscle label and the mixed label:
+    #muscleMask = (dixonSegmentedImage == 1) or (dixonSegmentedImage == 2)
+    muscleMask = sitk.Or(dixonSegmentedImage == 1, dixonSegmentedImage == 2)
+    # To get the skin fat, I work each slice separately. As it's more effective the close operation.
+    for j in range(0, muscleMask.GetSize()[2]):
+        sliceMuscle = muscleMask[:, :, j]
+        closingByReconstructionfilter = sitk.BinaryClosingByReconstructionImageFilter()
+        closingByReconstructionfilter.SetKernelRadius(vectorRadius)
+        sliceMuscle = closingByReconstructionfilter.Execute(sliceMuscle)
+        # Now paste the slice in the output:
+        sliceMuscle = sitk.JoinSeries(sliceMuscle)  # Needs tobe a 3D image
+        muscleMask = sitk.Paste(muscleMask, sliceMuscle, sliceMuscle.GetSize(), destinationIndex=[0, 0, j])
+    muscleMask = BinaryFillHolePerSlice(muscleMask)
+    return muscleMask
+
 # Function that creates a mask for the body from an in-phase dixon image. It uses an Otsu thresholding and morphological operations
 # to create a mask where the background is 0 and the body is 1. Can be used for masking image registration.
 def GetBodyMaskFromInPhaseDixon(inPhaseImage, vectorRadius = (2,2,2)):

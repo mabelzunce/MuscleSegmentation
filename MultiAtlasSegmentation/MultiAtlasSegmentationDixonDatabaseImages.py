@@ -14,7 +14,7 @@ import os
 import DixonTissueSegmentation
 
 ############################### CONFIGURATION #####################################
-DEBUG = 0 # In debug mode, all the intermediate iamges are written.
+DEBUG = 1 # In debug mode, all the intermediate iamges are written.
 USE_COSINES_AND_ORIGIN = 1
 OVERWRITE_EXISTING_SEGMENTATIONS = 0
 ############################### TARGET FOLDER ###################################
@@ -27,6 +27,11 @@ targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\DixonFovOK\\'
 targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\DixonFovOkTLCCases2020\\'
 targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\ToSegment\\'
 targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\MuscleStudyHipSpine\\CouchTo5kStudy\\'
+
+# Cases to process, leave it empty to process all the cases in folder:
+casesToSegment = ('C00019', 'C00020', 'C00057', 'C00077')
+casesToSegment = ('C00025')
+#casesToSegment = list()
 # Look for the folders or shortcuts:
 files = os.listdir(targetPath)
 # It can be lnk with shortcuts or folders:
@@ -35,6 +40,7 @@ strForShortcut = '-> '
 extensionImages = 'mhd'
 dixonTags = ("_I","_O","_W","_F")
 segmentedImageName = "segmentedImage"
+imagesSubfolder = '\\ForLibraryCropped\\'
 isDixon = True # If it's dixon uses dixon tissue segmenter to create a mask
 
 ############################## MULTI-ATLAS SEGMENTATION PARAMETERS ######################
@@ -44,14 +50,14 @@ libraryPath = 'D:\\Martin\\Segmentation\\AtlasLibrary\\' + libraryVersion + '\\N
 
 # Segmentation type:
 regType = 'Parameters_BSpline_NMI_2000iters_2048samples'
-useMaskInReg = True
+useMaskInReg = False
 #regType = 'BSplineStandardGradDesc_NMI_2000iters_3000samples_15mm_RndSparseMask'#'NMI'
 # Number of Atlases to select:
 numberOfSelectedAtlases = 5
 
 ###################### OUTPUT #####################
 # Output path:
-baseOutputPath = 'D:\\MuscleSegmentationEvaluation\\SegmentationWithPython\\CouchTo5k\\Plugin1.3\\' + libraryVersion + '\\N{0}_N{1}_mask{2}\\'.format(regType, numberOfSelectedAtlases, useMaskInReg)
+baseOutputPath = 'D:\\MuscleSegmentationEvaluation\\SegmentationWithPython\\CouchTo5k\\' + imagesSubfolder + 'Plugin1.3\\' + libraryVersion + '\\N{0}_N{1}_mask{2}\\'.format(regType, numberOfSelectedAtlases, useMaskInReg)
 if not os.path.exists(baseOutputPath):
     os.makedirs(baseOutputPath)
 
@@ -61,26 +67,27 @@ if not os.path.exists(baseOutputPath):
 targetImagesNames = []
 for filename in files:
     name, extension = os.path.splitext(filename)
-    # if name is a lnk, get the path:
-    if str(extension).endswith(extensionShortcuts):
-        # This is a shortcut:
-        shortcut = winshell.shortcut(targetPath + filename)
-        indexStart = shortcut.as_string().find(strForShortcut)
-        dataPath = shortcut.as_string()[indexStart+len(strForShortcut):] + '\\'
-    else:
-        dataPath = targetPath + filename + '\\'
-    # Check if the images are available:
-    filename = dataPath + 'ForLibrary\\' + name + dixonTags[0] + '.' + extensionImages
-    if not OVERWRITE_EXISTING_SEGMENTATIONS:
-        # if not overwrite, check if the segmentation is already available:
-        outputFilename = baseOutputPath + name + "\\" + segmentedImageName + "." + extensionImages
-        if os.path.exists(filename) and not os.path.exists(outputFilename):
-            # Intensity image:
-            targetImagesNames.append(dataPath + 'ForLibrary\\' + name)
-    else:
-        if os.path.exists(filename):
-            # Intensity image:
-            targetImagesNames.append(dataPath + 'ForLibrary\\' + name)
+    if (len(casesToSegment) == 0) or (name in casesToSegment):
+        # if name is a lnk, get the path:
+        if str(extension).endswith(extensionShortcuts):
+            # This is a shortcut:
+            shortcut = winshell.shortcut(targetPath + filename)
+            indexStart = shortcut.as_string().find(strForShortcut)
+            dataPath = shortcut.as_string()[indexStart+len(strForShortcut):] + '\\'
+        else:
+            dataPath = targetPath + filename + '\\'
+        # Check if the images are available:
+        filename = dataPath + imagesSubfolder + name + dixonTags[0] + '.' + extensionImages
+        if not OVERWRITE_EXISTING_SEGMENTATIONS:
+            # if not overwrite, check if the segmentation is already available:
+            outputFilename = baseOutputPath + name + "\\" + segmentedImageName + "." + extensionImages
+            if os.path.exists(filename) and not os.path.exists(outputFilename):
+                # Intensity image:
+                targetImagesNames.append(dataPath + imagesSubfolder + name)
+        else:
+            if os.path.exists(filename):
+                # Intensity image:
+                targetImagesNames.append(dataPath + imagesSubfolder + name)
 
 print("Number of target images: {0}".format(len(targetImagesNames)))
 print("List of files: {0}\n".format(targetImagesNames))
@@ -91,7 +98,7 @@ numLabels = 11 # 10 for muscles and bone, and 11 for undecided
 ##########################################################################################
 
 
-#targetImagesNames = targetImagesNames[4:5]
+#targetImagesNames = targetImagesNames[68:]
 ##########################################################################################
 ################################### SEGMENT EACH IMAGE ###################################
 for targetFilename in targetImagesNames:

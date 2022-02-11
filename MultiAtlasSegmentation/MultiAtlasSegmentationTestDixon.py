@@ -12,6 +12,7 @@ import os
 ############################### CONFIGURATION #####################################
 DEBUG = 1 # In debug mode, all the intermediate iamges are written.
 USE_COSINES_AND_ORIGIN = 1
+OVERWRITE_EXISTING_SEGMENTATIONS = 0
 
 ############################### TARGET FOLDER ###################################
 caseName = "ID00003"
