@@ -1,7 +1,9 @@
 #! python3
 import SimpleITK as sitk
+from skimage.morphology import convex_hull_image
 import PostprocessingLabels
 import numpy as np
+import matplotlib.pyplot as plt
 
 # Auxiliary function that fill hole in an image but per each slice:
 def BinaryFillHolePerSlice(input):
@@ -132,6 +134,80 @@ def GetSkinFatFromTissueSegmentedImage(dixonSegmentedImage, thresholdIterations 
         skinFat = sitk.Paste(skinFat, sliceFat, sliceFat.GetSize(), destinationIndex=[0, 0, j])
     return skinFat
 
+# gets the skin fat from a dixon segmented image, which consists of dixonSegmentedImage (0=air, 1=muscle, 2=muscle/fat,
+# 3=fat)
+def GetSkinFatFromTissueSegmentedImageUsingConvexHullPerSlice(dixonSegmentedImage, minObjectSizeInMuscle = 500, minObjectSizeInSkin = 500):
+    # Inital skin image:
+    skinFat = dixonSegmentedImage == 3
+    # Body image:
+    bodyMask = dixonSegmentedImage > 0
+    # Create a mask for other tissue:
+    notFatMask = sitk.And(bodyMask, (dixonSegmentedImage < 3))
+    notFatMask = sitk.BinaryMorphologicalOpening(notFatMask, 3)
+    #Filter to process the slices:
+    connectedFilter = sitk.ConnectedComponentImageFilter()
+    connectedFilter.FullyConnectedOff()
+    relabelComponentFilterMuscle = sitk.RelabelComponentImageFilter()
+    relabelComponentFilterMuscle.SetMinimumObjectSize(minObjectSizeInMuscle)
+    relabelComponentFilterSkin = sitk.RelabelComponentImageFilter()
+    relabelComponentFilterSkin.SetMinimumObjectSize(minObjectSizeInSkin)
+    # Go through all the slices:
+    for j in range(0, skinFat.GetSize()[2]):
+        sliceFat = skinFat[:, :, j]
+        sliceNotFat = notFatMask[:, :, j]
+        # Remove external objects:
+        sliceFatEroded = sitk.BinaryMorphologicalOpening(sliceFat, 5)
+        ndaSliceFatMask = sitk.GetArrayFromImage(sliceFatEroded)
+        ndaSliceFatMask = convex_hull_image(ndaSliceFatMask)
+        sliceFatConvexHull = sitk.GetImageFromArray(ndaSliceFatMask.astype('uint8'))
+        sliceFatConvexHull.CopyInformation(sliceFat)
+        #sliceNotFat = sitk.BinaryErode(sliceNotFat, 3)
+
+        # Get the largest connected component:
+        sliceNotFat = sitk.And(sliceNotFat, sliceFatConvexHull) # To remove fake object in the outer region of the body due to coil artefacts.
+        sliceNotFatObjects = relabelComponentFilterMuscle.Execute(
+            connectedFilter.Execute(sliceNotFat))  # RelabelComponent sort its by size.
+        sliceNotFat = sliceNotFatObjects > 0 # sitk.And(sliceNotFatObjects > 0, sliceNotFatObjects < 3) # Assumes that can be two large objetcts at most (for each leg)
+        # Dilate to return to the original size:
+        sliceNotFat = sitk.BinaryDilate(sliceNotFat, 3)  # dilate to recover original size
+
+        # Now apply the convex hull:
+        ndaNotFatMask = sitk.GetArrayFromImage(sliceNotFat)
+        ndaNotFatMask = convex_hull_image(ndaNotFatMask)
+        sliceNotFat = sitk.GetImageFromArray(ndaNotFatMask.astype('uint8'))
+        sliceNotFat.CopyInformation(sliceFat)
+        sliceFat = sitk.And(sliceFat, sitk.Not(sliceNotFat))
+        # Leave the objects larger than minSize for the skin fat:
+        sliceFat = relabelComponentFilterSkin.Execute(
+            connectedFilter.Execute(sliceFat))
+        #sliceFat = sitk.Cast(sliceFat, sitk.sitkUInt8)
+        sliceFat = sliceFat > 0
+        # Now paste the slice in the output:
+        sliceFat = sitk.JoinSeries(sliceFat)  # Needs to be a 3D image
+        skinFat = sitk.Paste(skinFat, sliceFat, sliceFat.GetSize(), destinationIndex=[0, 0, j])
+    skinFat = sitk.BinaryDilate(skinFat, 3)
+    return skinFat
+
+# gets the skin fat from a dixon segmented image, which consists of dixonSegmentedImage (0=air, 1=muscle, 2=muscle/fat,
+# 3=fat)
+def GetSkinFatFromTissueSegmentedImageUsingConvexHull(dixonSegmentedImage):
+    # Inital skin image:
+    skinFat = dixonSegmentedImage == 3
+    # skinFat = PostprocessingLabels.FilterUnconnectedRegionsPerSlices(skinFat, 1)
+    # Body image:
+    bodyMask = dixonSegmentedImage > 0
+    bodyMask = BinaryFillHolePerSlice(bodyMask)
+    # Create a mask for other tissue:
+    notFatMask = sitk.And(bodyMask, (dixonSegmentedImage < 3))
+    notFatMask = sitk.BinaryMorphologicalOpening(notFatMask, 3)
+    # Convex hull:
+    ndaNotFatMask = sitk.GetArrayFromImage(notFatMask)
+    ndaNotFatMask = convex_hull_image(ndaNotFatMask)
+    notFatMask = sitk.GetImageFromArray(ndaNotFatMask.astype('uint8'))
+    notFatMask.CopyInformation(dixonSegmentedImage)
+    skinFat = sitk.And(skinFat, sitk.Not(notFatMask))
+
+    return skinFat
 
 # gets the skin fat from a dixon segmented image, which consists of dixonSegmentedImage (0=air, 1=muscle, 2=muscle/fat,
 # 3=fat)
@@ -166,7 +242,39 @@ def GetBodyMaskFromInPhaseDixon(inPhaseImage, vectorRadius = (2,2,2)):
     #bodyMask = sitk.BinaryFillhole(bodyMask, False)
     # Fill holes in 2D (to avoid holes coming from bottom and going up):
     bodyMask = BinaryFillHolePerSlice(bodyMask)
+    return bodyMask
 
+# Function that creates a mask for the body from an fat dixon image. It uses an Otsu thresholding and morphological operations
+# to create a mask where the background is 0 and the body is 1. Can be used for masking image registration. Assumes that skin fat
+# surround the patient body.
+def GetBodyMaskFromFatDixonImage(fatImage, vectorRadius = (2,2,2), minObjectSizeInSkin = 500):
+    kernel = sitk.sitkBall
+    otsuImage = sitk.OtsuMultipleThresholds(fatImage, 1, 0, 128, # 1 classes and 128 bins
+                                            False)  # 2 Classes, itk, doesn't coun't the background as a class, so we use 1 in the input parameters.
+    # Open the mask to remove connected regions, mianly motion artefacts outside the body
+    fatMask = sitk.BinaryMorphologicalOpening(sitk.Equal(otsuImage, 1), vectorRadius, kernel)
+    # Remove small objects:
+    connectedFilter = sitk.ConnectedComponentImageFilter()
+    connectedFilter.FullyConnectedOff()
+    relabelComponentFilter = sitk.RelabelComponentImageFilter()
+    relabelComponentFilter.SetMinimumObjectSize(minObjectSizeInSkin)
+    sliceFatObjects = relabelComponentFilter.Execute(
+        connectedFilter.Execute(fatMask))  # RelabelComponent sort its by size.
+    fatMask = sliceFatObjects > 0  # Assumes that can be two large objetcts at most (for each leg)
+
+    fatMask = sitk.BinaryDilate(fatMask, vectorRadius)
+    bodyMask = fatMask
+    # Go through all the slices:
+    for j in range(0, fatMask.GetSize()[2]):
+        sliceFat = fatMask[:, :, j]
+        ndaSliceFatMask = sitk.GetArrayFromImage(sliceFat)
+        ndaSliceFatMask = convex_hull_image(ndaSliceFatMask)
+        sliceFatConvexHull = sitk.GetImageFromArray(ndaSliceFatMask.astype('uint8'))
+        sliceFatConvexHull.CopyInformation(sliceFat)
+        # Now paste the slice in the output:
+        sliceBody = sitk.JoinSeries(sliceFatConvexHull)  # Needs to be a 3D image
+        bodyMask = sitk.Paste(bodyMask, sliceBody, sliceBody.GetSize(), destinationIndex=[0, 0, j])
+    bodyMask = sitk.BinaryDilate(bodyMask, vectorRadius)
     return bodyMask
 
 # Function that creates a soft tissue mask from an in-phase dixon image. It uses an Otsu thresholding and the postprocesses

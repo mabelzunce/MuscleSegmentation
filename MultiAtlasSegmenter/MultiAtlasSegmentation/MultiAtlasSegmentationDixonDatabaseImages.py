@@ -14,7 +14,7 @@ import os
 import DixonTissueSegmentation
 
 ############################### CONFIGURATION #####################################
-DEBUG = 1 # In debug mode, all the intermediate iamges are written.
+DEBUG = 0 # In debug mode, all the intermediate iamges are written.
 USE_COSINES_AND_ORIGIN = 1
 OVERWRITE_EXISTING_SEGMENTATIONS = 0
 ############################### TARGET FOLDER ###################################
@@ -31,22 +31,24 @@ targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\MuscleStudyHipSpine\\CouchTo
 # Cases to process, leave it empty to process all the cases in folder:
 casesToSegment = ('C00019', 'C00020', 'C00057', 'C00077')
 casesToSegment = ('C00025')
-#casesToSegment = list()
+casesToSegment = list()
 # Look for the folders or shortcuts:
 files = os.listdir(targetPath)
+files = files[18:]
 # It can be lnk with shortcuts or folders:
 extensionShortcuts = 'lnk'
 strForShortcut = '-> '
 extensionImages = 'mhd'
 dixonTags = ("_I","_O","_W","_F")
 segmentedImageName = "segmentedImage"
-imagesSubfolder = '\\ForLibraryCropped\\'
+imagesSubfolder = '\\ForLibrary\\'
 isDixon = True # If it's dixon uses dixon tissue segmenter to create a mask
 
 ############################## MULTI-ATLAS SEGMENTATION PARAMETERS ######################
 libraryVersion = 'V1.3'
 # Library path:
 libraryPath = 'D:\\Martin\\Segmentation\\AtlasLibrary\\' + libraryVersion + '\\NativeResolutionAndSize\\'
+libraryPath = 'D:\\Martin\\Segmentation\\AtlasLibraryLumbarSpine\\'
 
 # Segmentation type:
 regType = 'Parameters_BSpline_NMI_2000iters_2048samples'
@@ -57,7 +59,7 @@ numberOfSelectedAtlases = 5
 
 ###################### OUTPUT #####################
 # Output path:
-baseOutputPath = 'D:\\MuscleSegmentationEvaluation\\SegmentationWithPython\\CouchTo5k\\' + imagesSubfolder + 'Plugin1.3\\' + libraryVersion + '\\N{0}_N{1}_mask{2}\\'.format(regType, numberOfSelectedAtlases, useMaskInReg)
+baseOutputPath = 'D:\\MuscleSegmentationEvaluation\\SegmentationWithPython\\CouchTo5k\\LumbarSpine\\' + imagesSubfolder + 'Plugin1.3\\' + libraryVersion + '\\N{0}_N{1}_mask{2}\\'.format(regType, numberOfSelectedAtlases, useMaskInReg)
 if not os.path.exists(baseOutputPath):
     os.makedirs(baseOutputPath)
 
@@ -151,5 +153,7 @@ for targetFilename in targetImagesNames:
     sitkIm.CopyImageProperties(softTissueMask, fixedImage)
 
     ################ 3) CALL MULTI ATLAS SEGMENTATION #########################
-    MultiAtlasSegmentation(fixedImage, softTissueMask, libraryPath, outputPath, DEBUG, numSelectedAtlases=numberOfSelectedAtlases, paramFileBspline = regType, maskedRegistration=useMaskInReg)
+    MultiAtlasSegmentation(fixedImage, softTissueMask, libraryPath, outputPath, DEBUG, numSelectedAtlases=numberOfSelectedAtlases,
+                           paramFileBspline = regType, maskedRegistration=useMaskInReg,
+                           suffixIntensityImage = '_I', suffixLabelsImage = '_labels', nameAtlasesToExcludeFromLibrary = [nameCaseFixed])
 

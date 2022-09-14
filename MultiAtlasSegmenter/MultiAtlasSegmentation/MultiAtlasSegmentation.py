@@ -20,7 +20,9 @@ from DynamicLabelFusionWithSimilarityWeights import DynamicLabelFusionWithSimila
 # Optional parameters:
 #   - numSelectedAtlases: number of selected atlas after majority voting.
 #   - segmentationType: segmentation type that mainly defines the similarity metric NCC and MRI
-def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath, debug, numSelectedAtlases = 5, paramFileBspline = 'NCC_2000_2048', maskedRegistration = True):
+def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath, debug, numSelectedAtlases = 5,
+                           paramFileBspline = 'NCC_2000_2048', maskedRegistration = True,
+                           suffixIntensityImage = '', suffixLabelsImage = '_labels',nameAtlasesToExcludeFromLibrary = []):
     ############################### CONFIGURATION #####################################
     # Temp path:
     tempPath = outputPath + 'temp' + '\\'
@@ -72,13 +74,15 @@ def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath,
         name, extension = os.path.splitext(filename)
     #    # Use only the marathon study
     #    if str(name).startswith("ID"):
-        if str(extension).endswith(extensionImages) and not str(name).endswith('labels'):
-            # Intensity image:
-            atlasImagesNames.append(name + '.' + extensionImages)
-            if str(name).endswith('bias'):
-                name = name[:-5]
-            # Label image:
-            atlasLabelsNames.append(name + '_labels.' + extensionImages)
+        if str(extension).endswith(extensionImages) and not str(name).endswith(suffixLabelsImage):
+            if str(name).endswith(suffixIntensityImage) and (len(suffixIntensityImage) > 0):
+                name = name[:-len(suffixIntensityImage)]
+            # Check if this atlas it's in the exclude list:
+            if not (name in nameAtlasesToExcludeFromLibrary):
+                # Intensity image:
+                atlasImagesNames.append(name + suffixIntensityImage + '.' + extensionImages)
+                # Label image:
+                atlasLabelsNames.append(name + suffixLabelsImage + '.' + extensionImages)
 
     log.write("Number of atlases: {0}\n".format(len(atlasImagesNames)))
     log.write("List of files: {0}\n".format(atlasImagesNames))
