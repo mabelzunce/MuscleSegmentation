@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import csv
 import os
-from Utils import swap_labels
+from utils import swap_labels
 #import winshell
 
 ############################### CONFIGURATION #####################################
@@ -34,7 +34,7 @@ if not os.path.exists(outputAugmentedNonLinearPath):
     os.makedirs(outputAugmentedNonLinearPath)
 # Get the atlases names and files:
 # Look for the folders or shortcuts:
-files = os.listdir(dataPath)
+data = os.listdir(dataPath)
 # Image format extension:
 extensionShortcuts = 'lnk'
 strForShortcut = '-> '
@@ -44,36 +44,44 @@ tagLabels = '_labels'
 atlasNames = [] # Names of the atlases
 atlasImageFilenames = [] # Filenames of the intensity images
 atlasLabelsFilenames = [] # Filenames of the label images
-for filename in files:
-    name, extension = os.path.splitext(filename)
-    # Substract the tagInPhase:
-    atlasName = name[:-len(tagInPhase)]
-    # Check if filename is the in phase header and the labels exists:
-    filenameLabels = dataPath + atlasName + tagLabels + '.' + extensionImages
-    if name.endswith(tagInPhase) and extension.endswith(extensionImages) and os.path.exists(filenameLabels) \
-            and (atlasName not in atlasNamesImplantOrNotGood):
-        # Atlas name:
-        atlasNames.append(atlasName)
-        # Intensity image:
-        atlasImageFilenames.append(filename)
-        # Labels image:
-        atlasLabelsFilenames.append(filenameLabels)
+folderIndex = []
+for folder in data:
+    auxPath = dataPath + folder + '\\'
+    files = os.listdir(auxPath)
+    for filename in files:
+        name, extension = os.path.splitext(filename)
+        # Substract the tagInPhase:
+        atlasName = name[:-len(tagInPhase)]
+
+        # Check if filename is the in phase header and the labels exists:
+        filenameLabels = auxPath + atlasName + tagLabels + '.' + extensionImages
+        if name.endswith(tagInPhase) and extension.endswith(extensionImages) and os.path.exists(filenameLabels) \
+                and (atlasName not in atlasNamesImplantOrNotGood):
+            # Atlas name:
+            atlasNames.append(atlasName)
+            # Intensity image:
+            atlasImageFilenames.append(filename)
+            # Labels image:
+            atlasLabelsFilenames.append(filenameLabels)
+
+            folderIndex.append(folder)
+
 print("Number of atlases images: {0}".format(len(atlasNames)))
 print("List of atlases: {0}\n".format(atlasNames))
 
 
 
 ################################### REFERENCE IMAGE FOR THE REGISTRATION #######################
-indexReference = 10
-referenceSliceImage = sitk.ReadImage(dataPath + atlasImageFilenames[indexReference])
-print('Reference image: {0}. Voxel size: {1}'.format(atlasImageFilenames[indexReference], referenceImage.GetSize()))
+indexReference = 1
+referenceSliceImage = sitk.ReadImage(dataPath + folderIndex[indexReference] + '\\' + atlasImageFilenames[indexReference])
+print('Reference image: {0}. Voxel size: {1}'.format(atlasImageFilenames[indexReference], referenceSliceImage.GetSize()))
 
 ################################### READ IMAGES, EXTRACT SLICES AND REGISTER IMAGES TO THE REFERENCE ########################################
 for i in range(0, len(atlasNames)):
 
     ############## 1) READ IMAGE WITH LABELS #############
     # Read target image:
-    atlasSliceImage = sitk.ReadImage(dataPath + atlasImageFilenames[i])
+    atlasSliceImage = sitk.ReadImage(dataPath + folderIndex[i] + '\\' + atlasImageFilenames[i])
     atlasSliceLabel = sitk.ReadImage(atlasLabelsFilenames[i])
 
     # Cast the image as float:
