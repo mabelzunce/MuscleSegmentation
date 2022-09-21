@@ -72,7 +72,7 @@ print("List of atlases: {0}\n".format(atlasNames))
 
 
 ################################### REFERENCE IMAGE FOR THE REGISTRATION #######################
-indexReference = 5
+indexReference = 1
 referenceSliceImage = sitk.ReadImage(dataPath + folderIndex[indexReference] + '\\' + atlasImageFilenames[indexReference])
 referenceSliceImage = referenceSliceImage[:, :, 0]
 print('Reference image: {0}. Voxel size: {1}'.format(atlasImageFilenames[indexReference], referenceSliceImage.GetSize()))
@@ -127,7 +127,12 @@ for i in range(0, len(atlasNames)):
     ################################### AUGMENTATE WITH REFLECTION AND ROTATION ########################################
     for reflectionX in [1,-1]:
         ############## Reflection ######################
+        imageArray = sitk.GetArrayFromImage(referenceSliceImage)
+        imageCenter = [0.5 * len(imageArray), 0.5 * len(imageArray[0])]
+        print(imageCenter)
+
         scale = SimpleITK.ScaleTransform(2, (reflectionX, 1))
+        scale.SetCenter(imageCenter)
         for rotAngle_deg in rotationValues_deg:
             rotation2D = sitk.Euler2DTransform()
             rotation2D.SetAngle(np.deg2rad(rotAngle_deg))
