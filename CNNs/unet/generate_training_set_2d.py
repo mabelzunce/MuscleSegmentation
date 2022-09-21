@@ -14,7 +14,7 @@ USE_COSINES_AND_ORIGIN = 1
 
 ############################## REGISTRATION PARAMETER FILES ######################
 similarityMetricForReg = 'NMI'
-parameterFilesPath = '..\\Data\\Elastix\\'
+parameterFilesPath = '..\\..\\Data\\Elastix\\'
 paramFileRigid = 'Parameters_Rigid_' + similarityMetricForReg
 paramFileAffine = 'Parameters_Affine_' + similarityMetricForReg
 paramFileNonRigid = paramFileAffine#'Par0000bspline_500'
@@ -22,10 +22,10 @@ paramFileNonRigid = paramFileAffine#'Par0000bspline_500'
 rotationValues_deg = range(-10, 10+1, 5)
 ############################### IMAGES AVAILABLE ###################################
 atlasNamesImplantOrNotGood = ['7286867', '7291398', '7300327', '7393917', 'L0469978', 'L0483818', 'L0508687', 'L0554842']
-dataPath = '..\\Data\\LumbarSpine2D\\Segmented\\' # Base data path.
-outputPath = '..\\Data\\LumbarSpine2D\\TrainingSet\\' # Base data path.
-outputAugmentedLinearPath = '..\\Data\\LumbarSpine2D\\TrainingSetAugmentedLinear\\' # Base data path.
-outputAugmentedNonLinearPath = '..\\Data\\LumbarSpine2D\\TrainingSetAugmentedNonLinear\\' # Base data path.
+dataPath = '..\\..\\Data\\LumbarSpine2D\\Segmented\\' # Base data path.
+outputPath = '..\\..\\Data\\LumbarSpine2D\\TrainingSet\\' # Base data path.
+outputAugmentedLinearPath = '..\\..\\Data\\LumbarSpine2D\\TrainingSetAugmentedLinear\\' # Base data path.
+outputAugmentedNonLinearPath = '..\\..\\Data\\LumbarSpine2D\\TrainingSetAugmentedNonLinear\\' # Base data path.
 if not os.path.exists(outputPath):
     os.makedirs(outputPath)
 if not os.path.exists(outputAugmentedLinearPath):
@@ -125,17 +125,24 @@ for i in range(0, len(atlasNames)):
         plt.imshow(labels, cmap='hot', alpha=0.5)
 
     ################################### AUGMENTATE WITH REFLECTION AND ROTATION ########################################
-    for reflectionX in [1,-1]:
+    for reflectionX in [-1,1]:
         ############## Reflection ######################
         imageArray = sitk.GetArrayFromImage(referenceSliceImage)
-        imageCenter = [0.5 * len(imageArray), 0.5 * len(imageArray[0])]
-        print(imageCenter)
-
+        imageCenter_mm = np.array(referenceSliceImage.GetSpacing()) * np.array(referenceSliceImage.GetSize())/2; #0.5 * len(imageArray), 0.5 * len(imageArray[0])]
         scale = SimpleITK.ScaleTransform(2, (reflectionX, 1))
-        scale.SetCenter(imageCenter)
+        scale.SetCenter(imageCenter_mm)
+        #if reflectionX == -1:
+        #    filter = sitk.FlipImageFilter()
+        #    filter.SetFlipAxes((True, False))
+        #    atlasSliceImageTransformed = filter.Execute(atlasSliceImage)
+        #    atlasSliceLabelTransformed = filter.Execute(atlasSliceLabel)
+        #else:
+        #    atlasSliceImageTransformed = atlasSliceImage
+        #    atlasSliceLabelTransformed = atlasSliceLabel
         for rotAngle_deg in rotationValues_deg:
             rotation2D = sitk.Euler2DTransform()
             rotation2D.SetAngle(np.deg2rad(rotAngle_deg))
+            rotation2D.SetCenter(imageCenter_mm)
             # Composite transform:
             composite = sitk.Transform(scale)
             composite.AddTransform(rotation2D)
