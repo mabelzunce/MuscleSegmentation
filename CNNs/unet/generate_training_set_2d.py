@@ -54,17 +54,16 @@ for folder in data:
         atlasName = name[:-len(tagInPhase)]
 
         # Check if filename is the in phase header and the labels exists:
+        filenameImages = auxPath + atlasName + tagInPhase + '.' + extensionImages
         filenameLabels = auxPath + atlasName + tagLabels + '.' + extensionImages
         if name.endswith(tagInPhase) and extension.endswith(extensionImages) and os.path.exists(filenameLabels) \
                 and (atlasName not in atlasNamesImplantOrNotGood):
             # Atlas name:
             atlasNames.append(atlasName)
             # Intensity image:
-            atlasImageFilenames.append(filename)
+            atlasImageFilenames.append(filenameImages)
             # Labels image:
             atlasLabelsFilenames.append(filenameLabels)
-
-            folderIndex.append(folder)
 
 print("Number of atlases images: {0}".format(len(atlasNames)))
 print("List of atlases: {0}\n".format(atlasNames))
@@ -73,7 +72,7 @@ print("List of atlases: {0}\n".format(atlasNames))
 
 ################################### REFERENCE IMAGE FOR THE REGISTRATION #######################
 indexReference = 1
-referenceSliceImage = sitk.ReadImage(dataPath + folderIndex[indexReference] + '\\' + atlasImageFilenames[indexReference])
+referenceSliceImage = sitk.ReadImage(atlasImageFilenames[indexReference])
 referenceSliceImage = referenceSliceImage[:, :, 0]
 print('Reference image: {0}. Voxel size: {1}'.format(atlasImageFilenames[indexReference], referenceSliceImage.GetSize()))
 
@@ -82,7 +81,7 @@ for i in range(0, len(atlasNames)):
 
     ############## 1) READ IMAGE WITH LABELS #############
     # Read target image:
-    atlasSliceImage = sitk.ReadImage(dataPath + folderIndex[i] + '\\' + atlasImageFilenames[i])
+    atlasSliceImage = sitk.ReadImage(atlasImageFilenames[i])
     atlasSliceLabel = sitk.ReadImage(atlasLabelsFilenames[i])
 
     atlasSliceImage = atlasSliceImage[:, :, 0]
@@ -152,8 +151,8 @@ for i in range(0, len(atlasNames)):
             atlasSliceLabelTransformed = sitk.Resample(atlasSliceLabel, composite, sitk.sitkNearestNeighbor, 0, sitk.sitkUInt8)
             # Change the labels side:
             if reflectionX == -1:
-                for l in range (1,5):
-                    atlasSliceLabelTransformed = swap_labels(atlasSliceLabelTransformed, label1=l, label2=l+4)
+                for l in range(1, 6, 2):
+                    atlasSliceLabelTransformed = swap_labels(atlasSliceLabelTransformed, label1=l, label2=l+1)
 
             # write the 2d images:
             sitk.WriteImage(atlasSliceImageTransformed, outputAugmentedLinearPath + atlasNames[i] + '_refX' + str(reflectionX) + '_rotDeg' + str(rotAngle_deg) +'.' + extensionImages)
@@ -170,7 +169,7 @@ for i in range(0, len(atlasNames)):
     ################################### AUGMENTATE WITH NONLINEAR TRANSFORMATIONS ########################################
     for j in range(0, len(atlasNames)):
         # Image to realign to:
-        fixedSliceImage = sitk.ReadImage(dataPath + folderIndex[j] + '\\' + atlasImageFilenames[j])
+        fixedSliceImage = sitk.ReadImage(atlasImageFilenames[j])
         fixedSliceImage = fixedSliceImage[:, :, 0]
         ############## NONRIGID REGISTRATION #############
         # elastixImageFilter filter
