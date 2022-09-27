@@ -17,7 +17,7 @@ similarityMetricForReg = 'NMI'
 parameterFilesPath = '..\\..\\Data\\Elastix\\'
 paramFileRigid = 'Parameters_Rigid_' + similarityMetricForReg
 paramFileAffine = 'Parameters_Affine_' + similarityMetricForReg
-paramFileNonRigid = paramFileAffine#'Par0000bspline_500'
+paramFileNonRigid = 'Parameters_BSpline_NCC_1000iters_2048samples'#Par0000bspline_500'
 ############################## AUGMENTATION PARAMETERS ##########################
 rotationValues_deg = range(-10, 10+1, 5)
 ############################### IMAGES AVAILABLE ###################################
@@ -176,6 +176,8 @@ for i in range(0, len(atlasNames)):
         elastixImageFilter = sitk.ElastixImageFilter()
         # Parameter maps:
         parameterMapVector = sitk.VectorOfParameterMap()
+        parameterMapVector.append(elastixImageFilter.ReadParameterFile(parameterFilesPath
+                                                                       + paramFileRigid + '.txt'))
         parameterMapVector.append(elastixImageFilter.ReadParameterFile(parameterFilesPath
                                                                        + paramFileNonRigid + '.txt'))
         # Registration:

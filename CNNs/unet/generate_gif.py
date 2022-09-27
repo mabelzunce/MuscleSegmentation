@@ -1,6 +1,8 @@
 import os
 import imageio
 import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
 from PIL import Image as im
 import SimpleITK
 import SimpleITK as sitk
@@ -25,7 +27,7 @@ extensionImages = 'mhd'
 tagLabels = '_labels'
 flag = 0
 
-
+fig,ax = plt.subplots()
 for images in trainingSet:
     name, extension = os.path.splitext(images)
     # Check if filename is the in phase header and the labels exists:
@@ -35,14 +37,28 @@ for images in trainingSet:
         readImg = sitk.ReadImage(filenameImages)
         dataIm = sitk.GetArrayFromImage(readImg)
         image = im.fromarray(dataIm)
-        ts_imArray.append(image)
+        #ts_imArray.append(image)
         readLb = sitk.ReadImage(filenameLabels)
         dataLb = sitk.GetArrayFromImage(readLb)
         label = im.fromarray(dataLb)
         ts_lbArray.append(label)
+        readImg = (readImg-np.min(dataIm))*1/(np.max(dataIm)-np.min(dataIm))
+        overlayImage = sitk.LabelOverlay(image=readImg,
+                                              labelImage=readLb,
+                                              opacity=0.5, backgroundValue=0)
+        ndaOverlayImage = sitk.GetArrayFromImage(overlayImage)
+        ax = plt.imshow(ndaOverlayImage)
+                    #, cmap='gray', vmin=0, vmax=0.5 * np.max(dataIm))
+        #plt.imshow(dataLb, cmap='hot', alpha=0.3)
+        #plt.axis('off')
+        plt.show(block=False)
+        plt.pause(0.1)
+        fusedIm = im.fromarray((256*ax.get_array()).astype(np.uint8), "RGB")
 
-
-imageio.mimwrite('trainingSet.gif', ts_imArray, 'GIF', duration=0.3)
+        ts_imArray.append(fusedIm)
+ts_imArray[0].save('trainingSet.gif', format="GIF", append_images=ts_imArray,
+       save_all=True, duration=300, loop=0)
+#imageio.mimwrite('trainingSet.gif', ts_imArray, 'GIF', duration=0.3)
 imageio.mimwrite('trainingSetLabels.gif', ts_lbArray, 'GIF', duration=0.3)
 
 for images in linearSet:
