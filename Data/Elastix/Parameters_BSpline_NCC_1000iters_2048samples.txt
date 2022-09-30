@@ -42,7 +42,7 @@
 // unrealistic deformations. This is a very important setting!
 // We recommend tuning it for every specific application. It is
 // difficult to come up with a good 'default' value.
-(FinalGridSpacingInPhysicalUnits 16)
+(FinalGridSpacingInPhysicalUnits 64)
 
 // Alternatively, the grid spacing can be specified in voxel units.
 // To do that, uncomment the following line and comment/remove
@@ -74,9 +74,9 @@
 // By default, the images are downsampled by a factor of 2
 // compared to the next resolution.
 // So, in 2D, with 4 resolutions, the following schedule is used:
-//(ImagePyramidSchedule 8 8  4 4  2 2  1 1 )
+(ImagePyramidSchedule 8 8  4 4  2 2  1 1 )
 // And in 3D:
-(ImagePyramidSchedule 8 8 8  4 4 4  2 2 2  1 1 1 )
+//(ImagePyramidSchedule 8 8 8  4 4 4  2 2 2  1 1 1 )
 // You can specify any schedule, for example:
 //(ImagePyramidSchedule 4 4  4 3  2 1  1 1 )
 // Make sure that the number of elements equals the number
@@ -88,7 +88,7 @@
 // 200-2000 works usually fine for nonrigid registration.
 // The more, the better, but the longer computation time.
 // This is an important parameter!
-(MaximumNumberOfIterations 1000)
+(MaximumNumberOfIterations 200)
 
 // The step size of the optimizer, in mm. By default the voxel size is used.
 // which usually works well. In case of unusual high-resolution images

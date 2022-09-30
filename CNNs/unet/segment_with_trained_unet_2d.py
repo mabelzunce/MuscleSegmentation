@@ -20,7 +20,7 @@ from torch.utils.tensorboard import SummaryWriter
 #from sklearn.model_selection import train_test_split
 from datetime import datetime
 
-from Unet import Unet
+from unet_2d import Unet
 #from utils import imshow
 #from utils import MSE
 import torch

@@ -4,7 +4,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from PIL import Image as im
-import SimpleITK
 import SimpleITK as sitk
 
 trainingSetPath = '..\\..\\Data\\LumbarSpine2D\\TrainingSet\\'
