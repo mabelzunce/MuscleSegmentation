@@ -6,7 +6,7 @@ import os
 
 import tensorflow
 
-from Utils import imshow_from_torch
+from utils import imshow_from_torch
 import torch
 import torchvision
 import torchvision.transforms as transforms
@@ -20,7 +20,7 @@ from torch.utils.tensorboard import SummaryWriter
 #from sklearn.model_selection import train_test_split
 from datetime import datetime
 
-from Unet import Unet
+from unet_2d import Unet
 #from utils import imshow
 #from utils import MSE
 import torch
@@ -40,7 +40,7 @@ tagInPhase = '_I'
 tagLabels = '_labels'
 ############################ PARAMETERS ################################################
 # Size of the image we want to use in the cnn.
-# We will get it from the trsining set.
+# We will get it from the training set.
 # imageSize_voxels = (256,256)
 
 # Training/dev sets ratio, not using test set at the moment:

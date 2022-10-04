@@ -74,7 +74,7 @@
 // By default, the images are downsampled by a factor of 2
 // compared to the next resolution.
 // So, in 2D, with 4 resolutions, the following schedule is used:
-//(ImagePyramidSchedule 8 8  4 4  2 2  1 1 )
+(ImagePyramidSchedule 8 8  4 4  2 2  1 1 )
 // And in 3D:
 //(ImagePyramidSchedule 8 8 8  4 4 4  2 2 2  1 1 1 )
 // You can specify any schedule, for example:
