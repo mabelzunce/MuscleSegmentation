@@ -3,10 +3,9 @@ import SimpleITK as sitk
 import matplotlib.pyplot as plt
 import numpy as np
 import os
-
-import tensorflow
-
-from Utils import imshow_from_torch
+import sys
+#sys.path.append('....\\CNNs\\unet')
+from utils import imshow_from_torch
 import torch
 import torchvision
 import torchvision.transforms as transforms
@@ -19,8 +18,8 @@ from torch.utils.tensorboard import SummaryWriter
 
 #from sklearn.model_selection import train_test_split
 from datetime import datetime
-
-from Unet import Unet
+sys.path.append('..\\..\\CNNs\\unet')
+from unet_2d import Unet
 #from utils import imshow
 #from utils import MSE
 import torch
@@ -30,8 +29,8 @@ import torchvision
 from torchvision.utils import make_grid
 
 ############################ DATA PATHS ##############################################
-trainingSetPath = 'C:\\Users\\ecyt\\Documents\\Flor Sarmiento\\CNN1\\TrainingSet'
-outputPath = 'C:\\Users\\ecyt\\Documents\\Flor Sarmiento\\CNN1\\OutputPath'
+trainingSetPath = 'C:\\Users\\ecyt\\Documents\\Flor Sarmiento\\CNN correction\\MuscleSegmentation\\Data\\Pelvis3D\\Fusion\\'
+outputPath = 'C:\\Users\\ecyt\\Documents\\Flor Sarmiento\\CNN correction\\MuscleSegmentation\\MultiAtlasSegmenter\\LabelFusion\\Output Path Segmentation Correction'
 # Image format extension:
 extensionShortcuts = 'lnk'
 strForShortcut = '-> '
@@ -66,10 +65,10 @@ for filename in files:
     if filename.endswith("_I.mhd"):
         name, extension = os.path.splitext(filename)
         # Substract the tagInPhase:
-        atlasName = name
+        atlasName = name[:-2]
         # Check if filename is the in phase header and the labels exists:
         filenameImages = trainingSetPath + filename
-        filenameManualLabels = trainingSetPath + atlasName + tagManualLabels + '.' + extensionImages
+        filenameManLabels = trainingSetPath + atlasName + tagManualLabels + '.' + extensionImages
         filenameAutLabels = trainingSetPath + atlasName + tagAutLabels + '.' + extensionImages
         #if extension.endswith(extensionImages) and os.path.exists(filenameLabels):                     #no entiendo para que estaba esto
         # Atlas name:
@@ -77,7 +76,7 @@ for filename in files:
         # Intensity image:
         atlasImageFilenames.append(filenameImages)
         # Manual Labels:
-        atlasManualLabelsFilenames.append(filenameManualLabels)
+        atlasManLabelsFilenames.append(filenameManLabels)
         # Automatic Labels:
         atlasAutLabelsFilenames.append(filenameAutLabels)
 
@@ -86,21 +85,24 @@ numImages = len(atlasImageFilenames)
 for i in range(0, numImages):
     # Read images and add them in a numpy array:
     atlasImage = sitk.ReadImage(atlasImageFilenames[i])
-    atlasLabels = sitk.ReadImage(atlasLabelsFilenames[i])
+    atlasManLabels = sitk.ReadImage(atlasManualLabelsFilenames[i])
+    atlasAutLabels = sitk.ReadImage(atlasAutLabelsFilenames[i])
     if i == 0:
         imagesDataSet = np.zeros([numImages,atlasImage.GetSize()[1],atlasImage.GetSize()[0]])
-        labelsDataSet = np.zeros([numImages,atlasImage.GetSize()[1],atlasImage.GetSize()[0]])
+        manLabelsDataSet = np.zeros([numImages,atlasImage.GetSize()[1],atlasImage.GetSize()[0]])
+        autLabelsDataSet = np.zeros([numImages, atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
         # Size of each 2d image:
         dataSetImageSize_voxels = imagesDataSet.shape[1:3]
     imagesDataSet[i,:,:] = np.reshape(sitk.GetArrayFromImage(atlasImage), [1,atlasImage.GetSize()[1],atlasImage.GetSize()[0]])
-    labelsDataSet[i,:,:] = np.reshape(sitk.GetArrayFromImage(atlasLabels), [1,atlasImage.GetSize()[1],atlasImage.GetSize()[0]])
+    manLabelsDataSet[i,:,:] = np.reshape(sitk.GetArrayFromImage(atlasManLabels), [1,atlasImage.GetSize()[1],atlasImage.GetSize()[0]])
+    autLabelsDataSet[i, :, :] = np.reshape(sitk.GetArrayFromImage(atlasAutLabels),[1, atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
     i = i + 1
 print("Number of atlases images: {0}".format(len(atlasNames)))
 print("List of atlases: {0}\n".format(atlasNames))
 
 # Iterate and plot random images:
 numImagesToShow = numImages # Show all images
-cols = 6
+cols = 6   #6 columnas por que?
 rows = int(np.ceil(numImagesToShow/cols))
 indicesImages = np.random.choice(numImages, numImagesToShow, replace=False)
 plt.figure(figsize=(15, 10))
@@ -111,7 +113,8 @@ for i in range(numImagesToShow):
     #                                      opacity=0.5, backgroundValue=0)
     #plt.imshow(overlay)
     plt.imshow(imagesDataSet[i, :, :], cmap='gray', vmin=0, vmax=0.5*np.max(imagesDataSet[i, :, :]))
-    plt.imshow(labelsDataSet[i, :, :], cmap='hot', alpha = 0.3)
+    plt.imshow(autLabelsDataSet[i, :, :], cmap='hot', alpha=0.3)
+    plt.imshow(manLabelsDataSet[i, :, :], cmap='cold', alpha = 0.3)
     plt.axis('off')
 
 plt.subplots_adjust(wspace=.05, hspace=.05)
@@ -121,12 +124,16 @@ plt.savefig(outputPath + 'dataSet.png')
 
 # Add the channel dimension for compatibility:
 imagesDataSet = np.expand_dims(imagesDataSet, axis=1)
-labelsDataSet = np.expand_dims(labelsDataSet, axis=1)
+autLabelsDataSet = np.expand_dims(manLabelsDataSet, axis=1)
+manLabelsDataSet = np.expand_dims(autLabelsDataSet, axis=1)
 # Cast to float (the model expects a float):
 imagesDataSet = imagesDataSet.astype(np.float32)
-labelsDataSet = labelsDataSet.astype(np.float32)
-labelsDataSet[labelsDataSet!=5] = 0
-labelsDataSet[labelsDataSet==5] = 1
+autLabelsDataSet = autLabelsDataSet.astype(np.float32)
+autLabelsDataSet[autLabelsDataSet!=5] = 0
+autLabelsDataSet[autLabelsDataSet==5] = 1
+manLabelsDataSet = manLabelsDataSet.astype(np.float32)
+manLabelsDataSet[manLabelsDataSet!=5] = 0
+manLabelsDataSet[manLabelsDataSet==5] = 1
 ######################## TRAINING, VALIDATION AND TEST DATA SETS ###########################
 # Get the number of images for the training and test data sets:
 sizeFullDataSet = int(imagesDataSet.shape[0])
@@ -139,8 +146,8 @@ rng = np.random.default_rng()
 indicesTrainingSet = range(0,int(sizeTrainingSet))
 indicesDevSet = range(int(sizeTrainingSet), sizeFullDataSet)
 # Create dictionaries with training sets:
-trainingSet = dict([('input',imagesDataSet[indicesTrainingSet,:,:,:]), ('output', labelsDataSet[indicesTrainingSet,:,:,:])])
-devSet = dict([('input',imagesDataSet[indicesDevSet,:,:,:]), ('output', labelsDataSet[indicesDevSet,:,:,:])])
+trainingSet = dict([('input',imagesDataSet[indicesTrainingSet,:,:,:], autLabelsDataSet[indicesTrainingSet,:,:,:]), ('output', manLabelsDataSet[indicesTrainingSet,:,:,:])])   #acá deberia agregar en imput el aut
+devSet = dict([('input',imagesDataSet[indicesDevSet,:,:,:], manLabelsDataSet[indicesTrainingSet,:,:,:]), ('output', manLabelsDataSet[indicesDevSet,:,:,:])])
 
 
 
@@ -149,7 +156,7 @@ print('Data set size. Training set: {0}. Dev set: {1}.'.format(trainingSet['inpu
 ####################### CREATE A U-NET MODEL #############################################
 # Create a UNET with one input and one output canal.
 unet = Unet(1,1)
-inp = torch.rand(1, 1, dataSetImageSize_voxels[0], dataSetImageSize_voxels[1])
+inp = torch.rand(1, 1, dataSetImageSize_voxels[0], dataSetImageSize_voxels[1])      #imagen con un tamaño especifico con numeros aleatorios
 out = unet(inp)
 
 ##
@@ -162,7 +169,7 @@ criterion = nn.BCEWithLogitsLoss()
 optimizer = optim.Adam(unet.parameters(), lr=0.0001)
 
 # Number of  batches:
-batchSize = 4
+batchSize = 4                       ##de a cuantos batches la paso??
 numBatches = np.round(trainingSet['input'].shape[0]/batchSize).astype(int)
 # Show results every printStep batches:
 printStep = 1
