@@ -3,8 +3,9 @@ import SimpleITK as sitk
 import matplotlib.pyplot as plt
 import numpy as np
 import os
-
-import tensorflow
+import csv
+import datetime
+from datetime import datetime
 
 from utils import imshow_from_torch
 import torch
@@ -15,10 +16,10 @@ import torch.optim as optim
 
 from torch import nn
 from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
+
 
 #from sklearn.model_selection import train_test_split
-from datetime import datetime
+
 
 from unet_2d import Unet
 #from utils import imshow
@@ -30,8 +31,12 @@ import torchvision
 from torchvision.utils import make_grid
 
 ############################ DATA PATHS ##############################################
-trainingSetPath = 'D:\\Martin\\Segmentation\\TrainingSets\\Pelvis2DAugmentedLinear\\'
-outputPath = 'D:\\UNSAM\\Teaching\\Segmentacion\\2022_05_ClaseSegmentación\\'
+trainingSetPath = '..\\..\\Data\\LumbarSpine2D\\TrainingSet\\'
+outputPath = '..\\..\\Data\\LumbarSpine2D\\model\\'
+
+if not os.path.exists(outputPath):
+    os.makedirs(outputPath)
+
 # Image format extension:
 extensionShortcuts = 'lnk'
 strForShortcut = '-> '
@@ -57,6 +62,7 @@ files = os.listdir(trainingSetPath)
 atlasNames = [] # Names of the atlases
 atlasImageFilenames = [] # Filenames of the intensity images
 atlasLabelsFilenames = [] # Filenames of the label images
+
 #imagesDataSet = np.empty()
 #labelsDataSet = np.empty()
 i = 0
@@ -76,19 +82,21 @@ for filename in files:
         atlasLabelsFilenames.append(filenameLabels)
 
 # Initialize numpy array and read data:
-numImages = len(atlasImageFilenames)
+numImages = 20 #len(atlasImageFilenames)
+rng = np.random.default_rng()
+rints = rng.choice(4000, size=numImages, replace=False)
 for i in range(0, numImages):
     # Read images and add them in a numpy array:
-    atlasImage = sitk.ReadImage(atlasImageFilenames[i])
-    atlasLabels = sitk.ReadImage(atlasLabelsFilenames[i])
+    atlasImage = sitk.ReadImage(atlasImageFilenames[rints[i]])
+    atlasLabels = sitk.ReadImage(atlasLabelsFilenames[rints[i]])
     if i == 0:
         imagesDataSet = np.zeros([numImages,atlasImage.GetSize()[1],atlasImage.GetSize()[0]])
         labelsDataSet = np.zeros([numImages,atlasImage.GetSize()[1],atlasImage.GetSize()[0]])
         # Size of each 2d image:
-        dataSetImageSize_voxels = imagesDataSet.shape[1:3]
-    imagesDataSet[i,:,:] = np.reshape(sitk.GetArrayFromImage(atlasImage), [1,atlasImage.GetSize()[1],atlasImage.GetSize()[0]])
-    labelsDataSet[i,:,:] = np.reshape(sitk.GetArrayFromImage(atlasLabels), [1,atlasImage.GetSize()[1],atlasImage.GetSize()[0]])
-    i = i + 1
+        dataSetImageSize_voxels = imagesDataSet.shape[1:3]              #obtiene el getsize[1 y 0]
+    imagesDataSet[i, :, :] = np.reshape(sitk.GetArrayFromImage(atlasImage), [1,atlasImage.GetSize()[1],atlasImage.GetSize()[0]])
+    labelsDataSet[i, :, :] = np.reshape(sitk.GetArrayFromImage(atlasLabels), [1,atlasImage.GetSize()[1],atlasImage.GetSize()[0]])
+
 print("Number of atlases images: {0}".format(len(atlasNames)))
 print("List of atlases: {0}\n".format(atlasNames))
 
@@ -119,8 +127,8 @@ labelsDataSet = np.expand_dims(labelsDataSet, axis=1)
 # Cast to float (the model expects a float):
 imagesDataSet = imagesDataSet.astype(np.float32)
 labelsDataSet = labelsDataSet.astype(np.float32)
-labelsDataSet[labelsDataSet!=5] = 0
-labelsDataSet[labelsDataSet==5] = 1
+labelsDataSet[labelsDataSet != 1] = 0
+labelsDataSet[labelsDataSet == 1] = 1
 ######################## TRAINING, VALIDATION AND TEST DATA SETS ###########################
 # Get the number of images for the training and test data sets:
 sizeFullDataSet = int(imagesDataSet.shape[0])
@@ -133,8 +141,8 @@ rng = np.random.default_rng()
 indicesTrainingSet = range(0,int(sizeTrainingSet))
 indicesDevSet = range(int(sizeTrainingSet), sizeFullDataSet)
 # Create dictionaries with training sets:
-trainingSet = dict([('input',imagesDataSet[indicesTrainingSet,:,:,:]), ('output', labelsDataSet[indicesTrainingSet,:,:,:])])
-devSet = dict([('input',imagesDataSet[indicesDevSet,:,:,:]), ('output', labelsDataSet[indicesDevSet,:,:,:])])
+trainingSet = dict([('input', imagesDataSet[indicesTrainingSet, :, :, :]), ('output', labelsDataSet[indicesTrainingSet, :, :, :])])
+devSet = dict([('input', imagesDataSet[indicesDevSet,:,:,:]), ('output', labelsDataSet[indicesDevSet,:,:,:])])
 
 
 
@@ -142,7 +150,7 @@ print('Data set size. Training set: {0}. Dev set: {1}.'.format(trainingSet['inpu
 
 ####################### CREATE A U-NET MODEL #############################################
 # Create a UNET with one input and one output canal.
-unet = Unet(1,1)
+unet = Unet(1, 1)
 inp = torch.rand(1, 1, dataSetImageSize_voxels[0], dataSetImageSize_voxels[1])
 out = unet(inp)
 
@@ -158,29 +166,45 @@ optimizer = optim.Adam(unet.parameters(), lr=0.0001)
 # Number of  batches:
 batchSize = 4
 numBatches = np.round(trainingSet['input'].shape[0]/batchSize).astype(int)
+devNumBatches = np.round(devSet['input'].shape[0]/batchSize).astype(int)
 # Show results every printStep batches:
 printStep = 1
-figImages, axs = plt.subplots(3, 1,figsize=(20,20))
-figLoss, axLoss = plt.subplots(1, 1,figsize=(5,5))
+figImages, axs = plt.subplots(3, 1, figsize=(20, 20))
+figLoss, axLoss = plt.subplots(1, 1, figsize=(5, 5))
 # Show dev set loss every showDevLossStep batches:
-showDevLossStep = 4
+#showDevLossStep = 1
 inputsDevSet = torch.from_numpy(devSet['input'])
 gtDevSet = torch.from_numpy(devSet['output'])
 # Train
-lossValuesTrainingSet = []
+best_vloss = 1000
+
+timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+
 iterationNumbers = []
+iterationDevNumbers = []
+
+lossValuesTrainingSet = []
 lossValuesDevSet = []
-iterationNumbersForDevSet = []
+
+lossValuesTrainingSetAllEpoch = []
+lossValuesDevSetAllEpoch = []
+
 iter = 0
+deviter = 0
+
 for epoch in range(5):  # loop over the dataset multiple times
 
-    running_loss = 0.0
+    lossValuesTrainingSetEpoch = []
+    lossValuesDevSetEpoch = []
+
+    running_loss = 0.0 #si no printeas no lo usas
+    running_devloss = 0.0 #si no printeas no lo usas
+    unet.train(True)
     for i in range(numBatches):
         # get the inputs
         inputs = torch.from_numpy(trainingSet['input'][i*batchSize:(i+1)*batchSize,:,:,:])
         gt = torch.from_numpy(trainingSet['output'][i*batchSize:(i+1)*batchSize,:,:,:])
-        #imshow_from_torch(torchvision.utils.make_grid(inputs, normalize=True))
-        #imshow_from_torch(torchvision.utils.make_grid(gt, normalize=True))
+
         # zero the parameter gradients
         optimizer.zero_grad()
 
@@ -194,14 +218,8 @@ for epoch in range(5):  # loop over the dataset multiple times
         running_loss += loss.item()
         # Save loss values:
         lossValuesTrainingSet.append(loss.item())
+        lossValuesTrainingSetEpoch.append(loss.item())
         iterationNumbers.append(iter)
-        # Evaluate dev set if it's the turn to do it:
-        #if i % showDevLossStep == (showDevLossStep-1):
-        #    outputsDevSet = unet(inputsDevSet)
-        #    lossDevSet = criterion(outputsDevSet, gtDevSet)
-        #    lossValuesDevSet.append(lossDevSet.item())
-        #    iterationNumbersForDevSet.append(iter)
-        # Show data it printStep
         if i % printStep == (printStep-1):    # print every printStep mini-batches
             print('[%d, %5d] loss: %.3f' %
                   (epoch + 1, i + 1, running_loss))
@@ -226,20 +244,83 @@ for epoch in range(5):  # loop over the dataset multiple times
             # Show loss:
             plt.figure(figLoss)
             axLoss.plot(iterationNumbers, lossValuesTrainingSet)
-            axLoss.plot(iterationNumbersForDevSet, lossValuesDevSet)
+            axLoss.plot(iterationDevNumbers, lossValuesDevSet)
             plt.draw()
             plt.pause(0.0001)
         # Update iteration number:
         iter = iter + 1
+    lossValuesTrainingSetAllEpoch.append(np.mean(lossValuesTrainingSetEpoch))
+
+    unet.train(False)
+    for i in range(devNumBatches):
+        inputs = torch.from_numpy(devSet['input'][i * batchSize:(i + 1) * batchSize, :, :, :])
+        gt = torch.from_numpy(devSet['output'][i * batchSize:(i + 1) * batchSize, :, :, :])
+
+        outputs = unet(inputs)
+        loss = criterion(outputs, gt)
+        loss.backward()
+        running_devloss += loss
+
+        lossValuesDevSet.append(loss.item())
+        lossValuesDevSetEpoch.append(loss.item())
+
+        iterationDevNumbers.append(deviter)
+        deviter = deviter + 1
+    avg_vloss = np.mean(lossValuesDevSetEpoch)
+    lossValuesDevSetAllEpoch.append(avg_vloss)
+
+    if avg_vloss < best_vloss:
+        best_vloss = avg_vloss
+        modelPath = outputPath + 'unet' + '_{}_{}_best_fit'.format(timestamp, epoch) + '.pt'
+        torch.save(unet.state_dict(), modelPath)
+
 
 print('Finished Training')
 torch.save(unet.state_dict(), outputPath + 'unet.pt')
 torch.save(unet, outputPath + 'unetFullModel.pt')
 
 
-# See weights:
-kernels = model.extractor[0].weight.detach().clone()
-kernels = kernels - kernels.min()
-kernels = kernels / kernels.max()
-img = make_grid(kernels)
-plt.imshow(img.permute(1, 2, 0))
+epochDataTS = []
+epochDataVS = []
+headerEpoch = ['Epoch', 'Loss']
+
+iterDataTS = []
+iterDataVS = []
+headerIter = ['Iteration', 'Loss']
+for i in range(epoch):
+    epochDataTS.append([i, lossValuesTrainingSetAllEpoch[i]])
+    epochDataVS.append([i, lossValuesDevSetAllEpoch[i]])
+
+for i in range(iter):
+    iterDataTS.append([i, lossValuesTrainingSet[i]])
+
+for i in range(deviter):
+    iterDataVS.append([i, lossValuesDevSet[i]])
+
+with open(outputPath + 'TrainingDataEpochCSV', 'w', encoding='UTF8') as file:
+    writer = csv.writer(file)
+
+    writer.writerow(headerEpoch)
+    writer.writerows(epochDataTS)
+    file.close()
+
+with open(outputPath + 'ValidDataEpochCSV', 'w', encoding='UTF8') as file:
+    writer = csv.writer(file)
+
+    writer.writerow(headerEpoch)
+    writer.writerows(epochDataVS)
+    file.close()
+
+with open(outputPath + 'TrainingDataCSV', 'w', encoding='UTF8') as file:
+    writer = csv.writer(file)
+
+    writer.writerow(headerIter)
+    writer.writerows(iterDataTS)
+    file.close()
+
+with open(outputPath + 'ValidDataCSV', 'w', encoding='UTF8') as file:
+    writer = csv.writer(file)
+
+    writer.writerow(headerIter)
+    writer.writerows(iterDataVS)
+    file.close()
