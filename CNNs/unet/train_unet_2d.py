@@ -1,11 +1,13 @@
 import nibabel as nb
 import SimpleITK as sitk
-import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use("TkAgg")
+from matplotlib import pyplot as plt
 import numpy as np
 import os
 import csv
-import datetime
 from datetime import datetime
+from utils import loss_csv
 
 from utils import imshow_from_torch
 import torch
@@ -82,7 +84,7 @@ for filename in files:
         atlasLabelsFilenames.append(filenameLabels)
 
 # Initialize numpy array and read data:
-numImages = 20 #len(atlasImageFilenames)
+numImages = 240 #len(atlasImageFilenames)
 rng = np.random.default_rng()
 rints = rng.choice(4000, size=numImages, replace=False)
 for i in range(0, numImages):
@@ -164,7 +166,7 @@ criterion = nn.BCEWithLogitsLoss()
 optimizer = optim.Adam(unet.parameters(), lr=0.0001)
 
 # Number of  batches:
-batchSize = 4
+batchSize = 2
 numBatches = np.round(trainingSet['input'].shape[0]/batchSize).astype(int)
 devNumBatches = np.round(devSet['input'].shape[0]/batchSize).astype(int)
 # Show results every printStep batches:
@@ -182,6 +184,7 @@ timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
 iterationNumbers = []
 iterationDevNumbers = []
+epochNumbers = []
 
 lossValuesTrainingSet = []
 lossValuesDevSet = []
@@ -192,18 +195,22 @@ lossValuesDevSetAllEpoch = []
 iter = 0
 deviter = 0
 
-for epoch in range(5):  # loop over the dataset multiple times
+
+
+torch.cuda.empty_cache()
+unet.to(device)
+for epoch in range(10):  # loop over the dataset multiple times
+    epochNumbers.append(epoch)
 
     lossValuesTrainingSetEpoch = []
     lossValuesDevSetEpoch = []
 
-    running_loss = 0.0 #si no printeas no lo usas
-    running_devloss = 0.0 #si no printeas no lo usas
+
     unet.train(True)
     for i in range(numBatches):
         # get the inputs
-        inputs = torch.from_numpy(trainingSet['input'][i*batchSize:(i+1)*batchSize,:,:,:])
-        gt = torch.from_numpy(trainingSet['output'][i*batchSize:(i+1)*batchSize,:,:,:])
+        inputs = torch.from_numpy(trainingSet['input'][i*batchSize:(i+1)*batchSize,:,:,:]).to(device)
+        gt = torch.from_numpy(trainingSet['output'][i*batchSize:(i+1)*batchSize,:,:,:]).to(device)
 
         # zero the parameter gradients
         optimizer.zero_grad()
@@ -215,112 +222,51 @@ for epoch in range(5):  # loop over the dataset multiple times
         optimizer.step()
 
         # print statistics
-        running_loss += loss.item()
         # Save loss values:
         lossValuesTrainingSet.append(loss.item())
         lossValuesTrainingSetEpoch.append(loss.item())
         iterationNumbers.append(iter)
-        if i % printStep == (printStep-1):    # print every printStep mini-batches
-            print('[%d, %5d] loss: %.3f' %
-                  (epoch + 1, i + 1, running_loss))
-            running_loss = 0.0
-            # Show input images:
-            plt.figure(figImages)
-            plt.axes(axs[0])
-            imshow_from_torch(torchvision.utils.make_grid(inputs, normalize=True))
-            axs[0].set_title('Input Batch {0}'.format(i))
-            plt.axes(axs[1])
-            #outputs = outputs.squeeze()
-            outputsLabels = torch.sigmoid(outputs)
-            outputsLabels = (outputsLabels > 0.5) * 255
-            # filter out the weak predictions and convert them to integers
-            #outputsLabels = outputsLabels.to(torch.uint8)
-            imshow_from_torch(torchvision.utils.make_grid(inputs, normalize=True))
-            imshow_from_torch(torchvision.utils.make_grid(outputsLabels.to(torch.float), normalize=True), ialpha=0.5, icmap='hot')
-            axs[1].set_title('Output Epoch {0}'.format(epoch))
-            plt.axes(axs[2])
-            imshow_from_torch(torchvision.utils.make_grid(gt, normalize=True))
-            axs[2].set_title('Ground Truth')
-            # Show loss:
-            plt.figure(figLoss)
-            axLoss.plot(iterationNumbers, lossValuesTrainingSet)
-            axLoss.plot(iterationDevNumbers, lossValuesDevSet)
-            plt.draw()
-            plt.pause(0.0001)
+        #Print epoch iteration and loss value:
+        print('[%d, %5d] loss: %.3f' % (epoch, i, loss.item()))
+        #running_loss = 0.0
         # Update iteration number:
         iter = iter + 1
+        torch.cuda.empty_cache()
     lossValuesTrainingSetAllEpoch.append(np.mean(lossValuesTrainingSetEpoch))
 
     unet.train(False)
     for i in range(devNumBatches):
-        inputs = torch.from_numpy(devSet['input'][i * batchSize:(i + 1) * batchSize, :, :, :])
-        gt = torch.from_numpy(devSet['output'][i * batchSize:(i + 1) * batchSize, :, :, :])
+        inputs = torch.from_numpy(devSet['input'][i * batchSize:(i + 1) * batchSize, :, :, :]).to(device)
+        gt = torch.from_numpy(devSet['output'][i * batchSize:(i + 1) * batchSize, :, :, :]).to(device)
 
         outputs = unet(inputs)
         loss = criterion(outputs, gt)
         loss.backward()
-        running_devloss += loss
+
 
         lossValuesDevSet.append(loss.item())
         lossValuesDevSetEpoch.append(loss.item())
 
         iterationDevNumbers.append(deviter)
         deviter = deviter + 1
+        torch.cuda.empty_cache()
     avg_vloss = np.mean(lossValuesDevSetEpoch)
     lossValuesDevSetAllEpoch.append(avg_vloss)
 
+
     if avg_vloss < best_vloss:
         best_vloss = avg_vloss
+        print('[validation Epoch: %d] best_vloss: %.3f' % (epoch, best_vloss))
         modelPath = outputPath + 'unet' + '_{}_{}_best_fit'.format(timestamp, epoch) + '.pt'
         torch.save(unet.state_dict(), modelPath)
-
 
 print('Finished Training')
 torch.save(unet.state_dict(), outputPath + 'unet.pt')
 torch.save(unet, outputPath + 'unetFullModel.pt')
 
 
-epochDataTS = []
-epochDataVS = []
-headerEpoch = ['Epoch', 'Loss']
 
-iterDataTS = []
-iterDataVS = []
-headerIter = ['Iteration', 'Loss']
-for i in range(epoch):
-    epochDataTS.append([i, lossValuesTrainingSetAllEpoch[i]])
-    epochDataVS.append([i, lossValuesDevSetAllEpoch[i]])
-
-for i in range(iter):
-    iterDataTS.append([i, lossValuesTrainingSet[i]])
-
-for i in range(deviter):
-    iterDataVS.append([i, lossValuesDevSet[i]])
-
-with open(outputPath + 'TrainingDataEpochCSV', 'w', encoding='UTF8') as file:
-    writer = csv.writer(file)
-
-    writer.writerow(headerEpoch)
-    writer.writerows(epochDataTS)
-    file.close()
-
-with open(outputPath + 'ValidDataEpochCSV', 'w', encoding='UTF8') as file:
-    writer = csv.writer(file)
-
-    writer.writerow(headerEpoch)
-    writer.writerows(epochDataVS)
-    file.close()
-
-with open(outputPath + 'TrainingDataCSV', 'w', encoding='UTF8') as file:
-    writer = csv.writer(file)
-
-    writer.writerow(headerIter)
-    writer.writerows(iterDataTS)
-    file.close()
-
-with open(outputPath + 'ValidDataCSV', 'w', encoding='UTF8') as file:
-    writer = csv.writer(file)
-
-    writer.writerow(headerIter)
-    writer.writerows(iterDataVS)
-    file.close()
+loss_csv(lossValuesDevSetAllEpoch, outputPath + 'ValidDataEpoch.csv')
+loss_csv(lossValuesTrainingSetAllEpoch, outputPath + 'TestDataEpoch.csv')
+loss_csv(lossValuesDevSet, outputPath + 'ValidDataIter.csv')
+loss_csv(lossValuesTrainingSet, outputPath + 'TestDataIter.csv')
