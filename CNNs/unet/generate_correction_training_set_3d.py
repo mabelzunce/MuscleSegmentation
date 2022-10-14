@@ -77,13 +77,13 @@ print("List of atlases: {0}\n".format(atlasNames))
 
 ################################### REFERENCE IMAGE FOR THE REGISTRATION #######################
 indexReference = 1
-referenceSliceImage = sitk.ReadImage(atlasImageFilenames[indexReference])
+referenceSliceImage = sitk.ReadImage(atlasImageFilenames[indexReference])    #Es una Reference image no un Reference slice image
 #referenceSliceImage = referenceSliceImage[:, :, 0]
 print('Reference image: {0}. Voxel size: {1}'.format(atlasImageFilenames[indexReference], referenceSliceImage.GetSize()))
 
 ################################### READ IMAGES, EXTRACT SLICES AND REGISTER IMAGES TO THE REFERENCE ########################################
 for i in range(0, len(atlasNames)):
-
+    print('Altas:{0}\n'.format(atlasImageFilenames[i]))
     ############## 1) READ IMAGE WITH LABELS #############     #poner 3
     # Read target image:
     atlasSliceImage = sitk.ReadImage(atlasImageFilenames[i])
@@ -93,15 +93,14 @@ for i in range(0, len(atlasNames)):
     #atlasSliceImage = atlasSliceImage[:, :, 0]
     #atlasSliceLabel = atlasSliceLabel[:, :, 0]
     # Cast the image as float:
-    atlasSliceImage = sitk.Cast(atlasSliceImage, sitk.sitkFloat32)
+    atlasSliceImage = sitk.Cast(atlasSliceImage, sitk.sitkFloat32)   #lo convierte en float 32
     # Rigid registration to match voxel size and FOV.
     ############## 1) RIGID REGISTRATION #############
     # elastixImageFilter filter
     elastixImageFilter = sitk.ElastixImageFilter()
     # Parameter maps:
     parameterMapVector = sitk.VectorOfParameterMap()
-    parameterMapVector.append(elastixImageFilter.ReadParameterFile(parameterFilesPath
-                                                                   + paramFileRigid + '.txt'))
+    parameterMapVector.append(elastixImageFilter.ReadParameterFile(parameterFilesPath + paramFileRigid + '.txt'))
     # Registration:
     elastixImageFilter.SetFixedImage(referenceSliceImage)
     elastixImageFilter.SetMovingImage(atlasSliceImage)
@@ -110,6 +109,7 @@ for i in range(0, len(atlasNames)):
     # Get result and apply transform to labels:
     # Get the images:
     atlasSliceImage = elastixImageFilter.GetResultImage()
+
     # Apply transform:
     transformixImageFilter = sitk.TransformixImageFilter()
     transformixImageFilter.SetMovingImage(atlasSliceAutLabel)
@@ -122,10 +122,10 @@ for i in range(0, len(atlasNames)):
     transformixImageFilter.Execute()
     atlasSliceAutLabel = sitk.Cast(transformixImageFilter.GetResultImage(), sitk.sitkUInt8)
     atlasSliceManLabel = sitk.Cast(transformixImageFilter.GetResultImage(), sitk.sitkUInt8)   #se la tiene que aplicar a ambos --> aut
-    # write the 2d images:
+    # write the 3d images:
     sitk.WriteImage(atlasSliceImage, outputPath + atlasNames[i] + '.' + extensionImages)
-    sitk.WriteImage(atlasSliceAutLabel, outputPath + atlasNames[i] + tagLabels + '.' + extensionImages)
-    sitk.WriteImage(atlasSliceManLabel, outputPath + atlasNames[i] + tagLabels + '.' + extensionImages)
+    sitk.WriteImage(atlasSliceAutLabel, outputPath + atlasNames[i] + tagAutLabels + '.' + extensionImages)
+    sitk.WriteImage(atlasSliceManLabel, outputPath + atlasNames[i] + tagManLabels + '.' + extensionImages)
     # Show images:
     if DEBUG:
         slice = sitk.GetArrayFromImage(atlasSliceImage)
@@ -133,14 +133,14 @@ for i in range(0, len(atlasNames)):
         manLabels = sitk.GetArrayFromImage(atlasSliceManLabel)
         plt.subplot(1,3,1)
         plt.imshow(slice, cmap='gray')
-        plt.imshow(labels, cmap='hot', alpha=0.5)
+        plt.imshow(autLabels, cmap='hot', alpha=0.5)
 
     ################################### AUGMENTATE WITH REFLECTION AND ROTATION ########################################
     for reflectionX in [-1,1]:
         ############## Reflection ######################
         imageArray = sitk.GetArrayFromImage(referenceSliceImage)
         imageCenter_mm = np.array(referenceSliceImage.GetSpacing()) * np.array(referenceSliceImage.GetSize())/2; #0.5 * len(imageArray), 0.5 * len(imageArray[0])]
-        scale = SimpleITK.ScaleTransform(2, (reflectionX, 1))
+        scale = SimpleITK.ScaleTransform(3, (reflectionX, 1, 1))   #chequear si quiero q refleje en x #A 2D or 3D anisotropic scale of coordinate space around a fixed center.
         scale.SetCenter(imageCenter_mm)
         #if reflectionX == -1:
         #    filter = sitk.FlipImageFilter()
@@ -150,13 +150,14 @@ for i in range(0, len(atlasNames)):
         #else:
         #    atlasSliceImageTransformed = atlasSliceImage
         #    atlasSliceLabelTransformed = atlasSliceLabel
-        for rotAngle_deg in rotationValues_deg:
-            rotation2D = sitk.Euler2DTransform()
-            rotation2D.SetAngle(np.deg2rad(rotAngle_deg))
-            rotation2D.SetCenter(imageCenter_mm)
-            # Composite transform:
+        for rotAngle_deg in rotationValues_deg: #rotationValues_deg (definidos antes)= range(-10, 10+1, 5)
+            rotation3D = sitk.Euler3DTransform()
+            #rotation2D.SetAngle(np.deg2rad(rotAngle_deg))
+            rotation3D.SetRotation(0, 0, np.deg2rad(rotAngle_deg))
+            rotation3D.SetCenter(imageCenter_mm)
+            # Composite transform: (junta las dos transofrmadas)
             composite = sitk.Transform(scale)
-            composite.AddTransform(rotation2D)
+            composite.AddTransform(rotation3D)
             #scale.SetScale((-1,1))
             # Apply transform:
             atlasSliceImageTransformed = sitk.Resample(atlasSliceImage, composite, sitk.sitkLinear, 0)
@@ -170,8 +171,8 @@ for i in range(0, len(atlasNames)):
                     atlasSliceManLabelTransformed = swap_labels(atlasSliceManLabelTransformed, label1=l, label2=l + 1)
             # write the 2d images:
             sitk.WriteImage(atlasSliceImageTransformed, outputAugmentedLinearPath + atlasNames[i] + '_refX' + str(reflectionX) + '_rotDeg' + str(rotAngle_deg) +'.' + extensionImages)
-            sitk.WriteImage(atlasSliceAutLabelTransformed, outputAugmentedLinearPath + atlasNames[i] + '_refX' + str(reflectionX) + '_rotDeg' + str(rotAngle_deg) +  tagLabels  + '.' + extensionImages)
-            sitk.WriteImage(atlasSliceManLabelTransformed, outputAugmentedLinearPath + atlasNames[i] + '_refX' + str(reflectionX) + '_rotDeg' + str(rotAngle_deg) + tagLabels + '.' + extensionImages)
+            sitk.WriteImage(atlasSliceAutLabelTransformed, outputAugmentedLinearPath + atlasNames[i] + '_refX' + str(reflectionX) + '_rotDeg' + str(rotAngle_deg) +  tagAutLabels  + '.' + extensionImages)
+            sitk.WriteImage(atlasSliceManLabelTransformed, outputAugmentedLinearPath + atlasNames[i] + '_refX' + str(reflectionX) + '_rotDeg' + str(rotAngle_deg) + tagManLabels + '.' + extensionImages)
 
             # Show images:
             if DEBUG:
@@ -188,7 +189,7 @@ for i in range(0, len(atlasNames)):
     for j in range(0, len(atlasNames)):
         # Image to realign to:
         fixedSliceImage = sitk.ReadImage(atlasImageFilenames[j])
-        fixedSliceImage = fixedSliceImage[:, :, 0]
+        #fixedSliceImage = fixedSliceImage[:, :, 0]
         ############## NONRIGID REGISTRATION #############
         # elastixImageFilter filter
         elastixImageFilter = sitk.ElastixImageFilter()
@@ -209,7 +210,7 @@ for i in range(0, len(atlasNames)):
 
         # Apply transform:
         transformixImageFilter = sitk.TransformixImageFilter()
-        transformixImageFilter.SetMovingImage(atlasAutSliceLabel)
+        transformixImageFilter.SetMovingImage(atlasSliceAutLabel)
         transformixImageFilter.SetTransformParameterMap(elastixImageFilter.GetTransformParameterMap())
         transformixImageFilter.SetTransformParameter("FinalBSplineInterpolationOrder", "0")
         transformixImageFilter.SetTransformParameter("ResultImagePixelType", "unsigned char")
@@ -222,7 +223,6 @@ for i in range(0, len(atlasNames)):
         sitk.WriteImage(atlasSliceImageDeformed, outputAugmentedNonLinearPath + atlasNames[i] + '_' + atlasNames[j] + '.' + extensionImages)
         sitk.WriteImage(atlasSliceAutLabelDeformed, outputAugmentedNonLinearPath + atlasNames[i] + '_' + atlasNames[j] + tagAutLabels + '.' + extensionImages)
         sitk.WriteImage(atlasSliceManLabelDeformed, outputAugmentedNonLinearPath + atlasNames[i] + '_' + atlasNames[j] + tagManLabels + '.' + extensionImages)
-
 
         # Show images:
         # slice = sitk.GetArrayFromImage(atlasSliceImageDeformed)
