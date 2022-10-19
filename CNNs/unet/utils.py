@@ -19,7 +19,6 @@ def swap_labels(img, label1=0, label2=1):
     img = (img * mask1not) + mask1 * label2
     img = (img * mask2not) + mask2 * label1
     return img
-
 def loss_csv (loss_vector, outpath):
     data = []
     for i in range(len(loss_vector)):
