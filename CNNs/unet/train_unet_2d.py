@@ -6,10 +6,11 @@ from matplotlib import pyplot as plt
 import numpy as np
 import os
 import csv
+import math
 from datetime import datetime
 from utils import loss_csv
-
 from utils import imshow_from_torch
+from matplotlib import cm
 import torch
 import torchvision
 import torchvision.transforms as transforms
@@ -84,9 +85,9 @@ for filename in files:
         atlasLabelsFilenames.append(filenameLabels)
 
 # Initialize numpy array and read data:
-numImages = 240 #len(atlasImageFilenames)
+numImages = 1000 #len(atlasImageFilenames)
 rng = np.random.default_rng()
-rints = rng.choice(4000, size=numImages, replace=False)
+rints = rng.choice(2000, size=numImages, replace=False)
 for i in range(0, numImages):
     # Read images and add them in a numpy array:
     atlasImage = sitk.ReadImage(atlasImageFilenames[rints[i]])
@@ -171,8 +172,10 @@ numBatches = np.round(trainingSet['input'].shape[0]/batchSize).astype(int)
 devNumBatches = np.round(devSet['input'].shape[0]/batchSize).astype(int)
 # Show results every printStep batches:
 printStep = 1
-figImages, axs = plt.subplots(3, 1, figsize=(20, 20))
-figLoss, axLoss = plt.subplots(1, 1, figsize=(5, 5))
+plotStep_epochs = 1
+numImagesPerRow = batchSize
+if plotStep_epochs != math.inf:
+    figEpochs, axs_epochs = plt.subplots(1, 4, figsize=(25, 8))
 # Show dev set loss every showDevLossStep batches:
 #showDevLossStep = 1
 inputsDevSet = torch.from_numpy(devSet['input'])
@@ -243,7 +246,6 @@ for epoch in range(10):  # loop over the dataset multiple times
         loss = criterion(outputs, gt)
         loss.backward()
 
-
         lossValuesDevSet.append(loss.item())
         lossValuesDevSetEpoch.append(loss.item())
 
@@ -253,6 +255,46 @@ for epoch in range(10):  # loop over the dataset multiple times
     avg_vloss = np.mean(lossValuesDevSetEpoch)
     lossValuesDevSetAllEpoch.append(avg_vloss)
 
+    if (epoch % plotStep_epochs) == (plotStep_epochs - 1):
+        # Get the labels from the outputs:
+        outputsLabels = torch.sigmoid(outputs)
+        outputsLabels = (outputsLabels > 0.5) * 255
+
+        plt.figure(figEpochs)
+        # Show loss:
+        plt.axes(axs_epochs[0])
+        plt.plot(np.arange(0, epoch + 1), lossValuesTrainingSetAllEpoch, label='Training Set')
+        plt.plot(np.arange(0.5, (epoch + 1)), lossValuesDevSetAllEpoch,
+                 label='Validation Set')  # Validation always shifted 0.5
+        plt.title('Training/Validation')
+        axs_epochs[0].set_xlabel('Epochs')
+        axs_epochs[0].set_ylabel('MSE')
+
+        # Show input images:
+        plt.axes(axs_epochs[1])
+        imshow_from_torch(torchvision.utils.make_grid(inputs.cpu(), normalize=True, nrow=numImagesPerRow))
+        imshow_from_torch(torchvision.utils.make_grid(outputs.cpu().detach(), normalize=True, nrow=numImagesPerRow),
+                          ialpha=0.5, icmap='hot')
+        axs_epochs[1].set_title('Input - Output UNET Batch {0}, Epoch {1}'.format(i, epoch))
+        plt.axes(axs_epochs[2])
+        #plt.imshow((inputs.cpu())[0, 0, :, :], cmap='gray', vmin=0, vmax=0.5 * np.max(imagesDataSet[i, :, :]))
+        #plt.imshow((outputsLabels.cpu().detach())[0,0,:,:], cmap='hot', alpha=0.5)
+        #plt.imshow(inputs.cpu(), cmap='hot', alpha=0.3)
+        imshow_from_torch(torchvision.utils.make_grid(inputs.cpu(), normalize=True, value_range=(0,0.5 * torch.max(inputs.cpu())), nrow=numImagesPerRow), icmap='gray')
+        cmap_vol = np.apply_along_axis(cm.hot, 0, outputsLabels.cpu().detach().numpy())  # converts prediction to cmap!
+        cmap_vol = torch.from_numpy(np.squeeze(cmap_vol))
+        imshow_from_torch(torchvision.utils.make_grid(cmap_vol, nrow=numImagesPerRow), ialpha=0.3, icmap='hot')
+        #imshow_from_torch(torchvision.utils.make_grid(outputsLabels.cpu().detach(), normalize=False, nrow=numImagesPerRow), ialpha=0.3, icmap='hot')
+        axs_epochs[2].set_title('Input - Output Labels Batch {0}, Epoch {1}'.format(i, epoch))
+        plt.axes(axs_epochs[3])
+        imshow_from_torch(torchvision.utils.make_grid(gt.cpu(), normalize=True, nrow=numImagesPerRow))
+        imshow_from_torch(
+            torchvision.utils.make_grid(outputsLabels.cpu().detach(), normalize=False, nrow=numImagesPerRow),
+            ialpha=0.5, icmap='hot')
+        axs_epochs[3].set_title('Ground Truth - Output Labels')
+        plt.draw()
+        plt.pause(0.0001)
+        plt.savefig(outputPath + 'model_training_epoch_{0}.png'.format(epoch))
 
     if avg_vloss < best_vloss:
         best_vloss = avg_vloss

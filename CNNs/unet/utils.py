@@ -4,11 +4,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import csv
 
-def imshow_from_torch(img, imin=0, imax=1, ialpha = 1, icmap='Greys'):
+def imshow_from_torch(img, imin=0, imax=1, ialpha = 1, icmap='gray'):
     #img = img / 2 + 0.5     # unnormalize
     npimg = img.numpy()
-    plt.imshow(np.transpose(npimg, (1, 2, 0)),vmin = imin, vmax = imax, alpha = ialpha, cmap=icmap)
-
+    plt.imshow(np.transpose(npimg, (1, 2, 0)),vmin = imin, vmax = imax, cmap=icmap, alpha = ialpha)
 
 def swap_labels(img, label1=0, label2=1):
     #img = img / 2 + 0.5     # unnormalize
