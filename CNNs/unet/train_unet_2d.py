@@ -1,7 +1,6 @@
 import nibabel as nb
 import SimpleITK as sitk
 import matplotlib
-matplotlib.use("TkAgg")
 from matplotlib import pyplot as plt
 import numpy as np
 import os
@@ -20,18 +19,13 @@ import torch.optim as optim
 from torch import nn
 from torch.utils.data import DataLoader
 
-
-#from sklearn.model_selection import train_test_split
-
-
 from unet_2d import Unet
-#from utils import imshow
-#from utils import MSE
 import torch
 import torch.nn as nn
 import torchvision
 
 from torchvision.utils import make_grid
+AMP = True
 
 ############################ DATA PATHS ##############################################
 trainingSetPath = '..\\..\\Data\\LumbarSpine2D\\TrainingSet\\'
@@ -85,13 +79,13 @@ for filename in files:
         atlasLabelsFilenames.append(filenameLabels)
 
 # Initialize numpy array and read data:
-numImages = 12 #len(atlasImageFilenames)
+numImages = 216 #len(atlasImageFilenames)
 rng = np.random.default_rng()
-rInts = rng.choice(4000, size=numImages, replace=False)
+rInts = rng.choice(4000, size=np.round(numImages*0.75), replace=False)
 for i in range(0, numImages):
     # Read images and add them in a numpy array:
-    atlasImage = sitk.ReadImage(atlasImageFilenames[rInts[i]])
-    atlasLabels = sitk.ReadImage(atlasLabelsFilenames[rInts[i]])
+    atlasImage = sitk.ReadImage(atlasImageFilenames[i])
+    atlasLabels = sitk.ReadImage(atlasLabelsFilenames[i])
     if i == 0:
         imagesDataSet = np.zeros([numImages,atlasImage.GetSize()[1],atlasImage.GetSize()[0]])
         labelsDataSet = np.zeros([numImages,atlasImage.GetSize()[1],atlasImage.GetSize()[0]])
@@ -126,11 +120,11 @@ sizeDevSet = sizeFullDataSet-sizeTrainingSet
 rng = np.random.default_rng()
 #indicesTrainingSet = rng.choice(int(sizeFullDataSet), int(sizeTrainingSet), replace=False)
 #indicesDevSet = np.delete(range(sizeFullDataSet), indicesTrainingSet)
-indicesTrainingSet = range(0,int(sizeTrainingSet))
+indicesTrainingSet = range(0, int(sizeTrainingSet))
 indicesDevSet = range(int(sizeTrainingSet), sizeFullDataSet)
 # Create dictionaries with training sets:
-trainingSet = dict([('input', imagesDataSet[indicesTrainingSet, :, :, :]), ('output', labelsDataSet[indicesTrainingSet, :, :, :])])
-devSet = dict([('input', imagesDataSet[indicesDevSet,:,:,:]), ('output', labelsDataSet[indicesDevSet,:,:,:])])
+trainingSet = dict([('input', imagesDataSet[:, :, :, :]), ('output', labelsDataSet[:, :, :, :])])
+devSet = dict([('input', imagesDevSet[:,:,:,:]), ('output', labelsDataSet[:,:,:,:])])
 
 
 
@@ -159,7 +153,7 @@ devNumBatches = np.round(devSet['input'].shape[0]/devBatchSize).astype(int)
 # Show results every printStep batches:
 printStep = 1
 figImages, axs = plt.subplots(3, 1, figsize=(20, 20))
-figLoss, axLoss = plt.subplots(1, 1, figsize=(5, 5))
+figLoss, axLoss = plt.subplots(1, 4, figsize=(25, 8))
 # Show dev set loss every showDevLossStep batches:
 #showDevLossStep = 1
 inputsDevSet = torch.from_numpy(devSet['input'])
@@ -203,15 +197,16 @@ for epoch in range(50):  # loop over the dataset multiple times
         optimizer.zero_grad()
 
         # forward + backward + optimize
-        with torch.amp.autocast(device_type='cuda', dtype=torch.float16):
+        if AMP:
+            with torch.amp.autocast(device_type='cuda', dtype=torch.float16):
+                outputs = unet(inputs)
+                loss = criterion(outputs, gt)
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+        else:
             outputs = unet(inputs)
-
             loss = criterion(outputs, gt)
-
-        scaler.scale(loss).backward()
-        scaler.step(optimizer)
-        scaler.update()
-
         # print statistics
         # Save loss values:
         lossValuesTrainingSet.append(loss.item())
@@ -224,7 +219,6 @@ for epoch in range(50):  # loop over the dataset multiple times
     lossValuesTrainingSetAllEpoch.append(np.mean(lossValuesTrainingSetEpoch))
     loss_csv(lossValuesTrainingSetAllEpoch, outputPath + 'TestDataEpoch.csv')
     loss_csv(lossValuesTrainingSet, outputPath + 'TestDataIter.csv')
-
 
     unet.train(False)
     r = randint(0, len(devSet))
@@ -258,33 +252,25 @@ for epoch in range(50):  # loop over the dataset multiple times
 
     if epoch % printStep == (printStep - 1) and epoch > 4:  # print every printStep mini-batches
         # Show input images:
-        plt.figure(figImages)
-        plt.axes(axs[0])
-        imshow_from_torch(torchvision.utils.make_grid(auxInputs, normalize=True))
-        axs[0].set_title('Input dev Batch {0}'.format(r))
-        plt.axes(axs[1])
-        outputsLabels = torch.sigmoid(auxOutputs)
-        outputsLabels = (outputsLabels > 0.5) * 255
-        # filter out the weak predictions and convert them to integers
-        # outputsLabels = outputsLabels.to(torch.uint8)
-        imshow_from_torch(torchvision.utils.make_grid(auxInputs, normalize=True))
-        imshow_from_torch(torchvision.utils.make_grid(outputsLabels.to(torch.float), normalize=True), ialpha=0.5,
-                          icmap='hot')
-        axs[1].set_title('Output dev Epoch {0}'.format(epoch))
-        plt.axes(axs[2])
-        imshow_from_torch(torchvision.utils.make_grid(auxGT, normalize=True))
-        axs[2].set_title('Ground Truth')
-        plt.savefig(outputPath + 'images' + '_{}_{}_best_fit'.format(timestamp, epoch))
-        # Show loss:
+        x = np.arange(0, len(lossValuesTrainingSet))
+        y1 = lossValuesTrainingSet
         plt.figure(figLoss)
-
-        plt.title('Loss')
-        plt.xlabel('Epoch')
-        plt.ylabel('Loss Value')
-        axLoss.plot(epochNumbers[epoch-5:], lossValuesTrainingSetAllEpoch[epoch-5:], label='TrainingSet')
-        axLoss.plot(epochNumbers[epoch-5:], lossValuesDevSetAllEpoch[epoch-5:], label='Devset')
-        plt.legend(loc='upper left')
-        plt.draw()
+        plt.axes(axLoss[0])
+        plt.plot(x, y1)
+        plt.title('Training')
+        axLoss[0].set_xlabel('Batches')
+        axLoss[0].set_ylabel('MSE')
+        # Show input images:
+        plt.axes(axLoss[1])
+        plt.imshow(torchvision.utils.make_grid(auxInputs, normalize=True, nrow=4))
+        axLoss[0].set_title('Input Batch {0}, Epoch {1}'.format(i, epoch))
+        plt.axes(axLoss[2])
+        plt.imshow(torchvision.utils.make_grid(auxOutputs, normalize=True, nrow=4))
+        axLoss[1].set_title('Output Batch {0}, Epoch {1}'.format(i, epoch))
+        plt.axes(axLoss[3])
+        plt.imshow(torchvision.utils.make_grid(auxGT, normalize=True, nrow=4))
+        axLoss[2].set_title('Ground Truth')
+        plt.savefig(outputPath + name + '_training_batch_{0}_epoch_{1}.png'.format(i, epoch))
 
         plt.savefig(outputPath + 'loss')
 
