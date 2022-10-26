@@ -32,7 +32,7 @@ import torchvision
 
 from torchvision.utils import make_grid
 AMP = True
-LoadModel = False
+LoadModel = True
 ############################ DATA PATHS ##############################################
 trainingSetPath = '..\\..\\Data\\LumbarSpine2D\\TrainingSet\\'
 outputPath = '..\\..\\Data\\LumbarSpine2D\\model\\'
@@ -102,7 +102,7 @@ for filename in files:
 numImagesPerSubject = int(np.trunc(numImagesPerSubject/4))
 # Initialize numpy array and read data:
 rints=[]
-numImages = 2100 #numero divisible por  numero de sujetos e imagenes por sujeto
+numImages = 420 #numero divisible por  numero de sujetos e imagenes por sujeto
 imgPerSubject = int(np.trunc(numImages/numSubjects))
 print(imgPerSubject)
 rng = np.random.default_rng()
