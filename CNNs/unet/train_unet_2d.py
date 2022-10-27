@@ -34,8 +34,8 @@ import torchvision
 from torchvision.utils import make_grid
 
 ############################ DATA PATHS ##############################################
-trainingSetPath = '..\\..\\Data\\LumbarSpine2D\\TrainingSet\\'
-outputPath = '..\\..\\Data\\LumbarSpine2D\\model\\'
+trainingSetPath = '../../Data/LumbarSpine2D/TrainingSet/'
+outputPath = '../../Data/LumbarSpine2D/model/'
 
 if not os.path.exists(outputPath):
     os.makedirs(outputPath)
