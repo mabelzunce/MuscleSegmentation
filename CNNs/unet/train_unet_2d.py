@@ -10,6 +10,7 @@ import math
 from datetime import datetime
 from utils import loss_csv
 from utils import imshow_from_torch
+from utils import dice
 from matplotlib import cm
 import torch
 import torchvision
@@ -170,7 +171,7 @@ indicesTrainingSet = range(0,int(sizeTrainingSet))
 indicesDevSet = range(int(sizeTrainingSet), sizeFullDataSet)
 # Create dictionaries with training sets:
 trainingSet = dict([('input', imagesDataSet[indicesTrainingSet, :, :, :]), ('output', labelsDataSet[indicesTrainingSet, :, :, :])])
-devSet = dict([('input', imagesDataSet[indicesDevSet,:,:,:]), ('output', labelsDataSet[indicesDevSet,:,:,:])])
+devSet = dict([('input', imagesDataSet[indicesDevSet, :, :, :]), ('output', labelsDataSet[indicesDevSet,:,:,:])])
 
 print('Data set size. Training set: {0}. Dev set: {1}.'.format(trainingSet['input'].shape[0], devSet['input'].shape[0]))
 
@@ -222,6 +223,9 @@ lossValuesDevSet = []
 lossValuesTrainingSetAllEpoch = []
 lossValuesDevSetAllEpoch = []
 
+diceTrainingEpoch = []
+diceValidEpoch = []
+
 iter = 0
 deviter = 0
 
@@ -232,6 +236,9 @@ for epoch in range(50):  # loop over the dataset multiple times
 
     lossValuesTrainingSetEpoch = []
     lossValuesDevSetEpoch = []
+
+    diceTraining = []
+    diceValid = []
 
     scaler = torch.cuda.amp.GradScaler()
     unet.train(True)
@@ -268,6 +275,16 @@ for epoch in range(50):  # loop over the dataset multiple times
         # Update iteration number:
         iter = iter + 1
         loss_csv(lossValuesTrainingSet, outputPath + 'TestDataIter.csv')
+        for k in range(batchSize):
+            reference = trainingSet['output'][i*batchSize + k, 0, :, :]
+            reference = sitk.GetImageFromArray(reference.astype('int64'))
+            outputs = outputs.cpu()
+            labels = torch.sigmoid(outputs.to(torch.float32))
+            labels = (labels > 0.5) * 255
+            segmented = sitk.GetImageFromArray(labels.numpy()[k, 0, :, :])
+            diceTraining.append(dice(reference, segmented))
+            print('diceScore: %d' % diceTraining[k])
+    diceTrainingEpoch.append(np.mean(diceTraining))
     lossValuesTrainingSetAllEpoch.append(np.mean(lossValuesTrainingSetEpoch))
 
     unet.train(False)
@@ -331,6 +348,7 @@ for epoch in range(50):  # loop over the dataset multiple times
         #plt.draw()
         #plt.pause(0.0001)
         plt.savefig(outputPath + 'model_training_epoch_{0}.png'.format(epoch))
+
 
     if avg_vloss < best_vloss:
         best_vloss = avg_vloss
