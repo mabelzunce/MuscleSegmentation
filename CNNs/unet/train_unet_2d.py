@@ -32,10 +32,16 @@ import torch.nn as nn
 import torchvision
 
 from torchvision.utils import make_grid
-
+AMP = True
+LoadModel = True
 ############################ DATA PATHS ##############################################
 trainingSetPath = '../../Data/LumbarSpine2D/TrainingSet/'
 outputPath = '../../Data/LumbarSpine2D/model/'
+modelLocation = '../../Data/LumbarSpine2D/PretrainedModel/'
+
+if LoadModel:
+    modelName = os.listdir(modelLocation)[0]
+    unetFilename = modelLocation + modelName
 
 if not os.path.exists(outputPath):
     os.makedirs(outputPath)
@@ -53,7 +59,7 @@ tagLabels = '_labels'
 
 # Training/dev sets ratio, not using test set at the moment:
 trainingSetRelSize = 0.8
-devSetRelSize = trainingSetRelSize-0.2
+devSetRelSize = 0.2
 
 ######################### CHECK DEVICE ######################
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -68,8 +74,18 @@ atlasLabelsFilenames = [] # Filenames of the label images
 
 #imagesDataSet = np.empty()
 #labelsDataSet = np.empty()
-i = 0
+numImagesPerSubject = 0
+numSubjects = 1
+subject = files[0].split('_')[0]
+aux = subject
+
 for filename in files:
+    subjectName = filename.split('_')[0]
+    if subject == subjectName:
+        numImagesPerSubject += 1
+    if subjectName != aux:
+        numSubjects += 1
+        aux = subjectName
     name, extension = os.path.splitext(filename)
     # Substract the tagInPhase:
     atlasName = name
@@ -84,21 +100,30 @@ for filename in files:
         # Labels image:
         atlasLabelsFilenames.append(filenameLabels)
 
+numImagesPerSubject = int(np.trunc(numImagesPerSubject/4))
 # Initialize numpy array and read data:
-numImages = 1000 #len(atlasImageFilenames)
+rints=[]
+numImages = 420 #numero divisible por  numero de sujetos e imagenes por sujeto
+imgPerSubject = int(np.trunc(numImages/numSubjects))
+print(imgPerSubject)
 rng = np.random.default_rng()
-rints = rng.choice(2000, size=numImages, replace=False)
+for j in range(numSubjects):
+    rints.extend(rng.choice(numImagesPerSubject, size=imgPerSubject, replace=False))
+
+k = 0
 for i in range(0, numImages):
     # Read images and add them in a numpy array:
-    atlasImage = sitk.ReadImage(atlasImageFilenames[rints[i]])
-    atlasLabels = sitk.ReadImage(atlasLabelsFilenames[rints[i]])
+    if ((i+1) % imgPerSubject) == 0 and (k+1) < numSubjects:
+        k += 1
+    atlasImage = sitk.ReadImage(atlasImageFilenames[k * numImagesPerSubject + rints[i]])
+    atlasLabels = sitk.ReadImage(atlasLabelsFilenames[k * numImagesPerSubject + rints[i]])
     if i == 0:
         imagesDataSet = np.zeros([numImages,atlasImage.GetSize()[1],atlasImage.GetSize()[0]])
         labelsDataSet = np.zeros([numImages,atlasImage.GetSize()[1],atlasImage.GetSize()[0]])
         # Size of each 2d image:
         dataSetImageSize_voxels = imagesDataSet.shape[1:3]              #obtiene el getsize[1 y 0]
-    imagesDataSet[i, :, :] = np.reshape(sitk.GetArrayFromImage(atlasImage), [1,atlasImage.GetSize()[1],atlasImage.GetSize()[0]])
-    labelsDataSet[i, :, :] = np.reshape(sitk.GetArrayFromImage(atlasLabels), [1,atlasImage.GetSize()[1],atlasImage.GetSize()[0]])
+    imagesDataSet[i, :, :] = np.reshape(sitk.GetArrayFromImage(atlasImage), [1, atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
+    labelsDataSet[i, :, :] = np.reshape(sitk.GetArrayFromImage(atlasLabels), [1, atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
 
 print("Number of atlases images: {0}".format(len(atlasNames)))
 print("List of atlases: {0}\n".format(atlasNames))
@@ -109,19 +134,19 @@ cols = 6
 rows = int(np.ceil(numImagesToShow/cols))
 indicesImages = np.random.choice(numImages, numImagesToShow, replace=False)
 plt.figure(figsize=(15, 10))
-for i in range(numImagesToShow):
-    plt.subplot(rows, cols, i + 1)
+#for i in range(numImagesToShow):
+    #plt.subplot(rows, cols, i + 1)
     #overlay = sitk.LabelOverlay(image=imagesDataSet[i,:,:],
     #                                      labelImage=labelsDataSet[i,:,:],
     #                                      opacity=0.5, backgroundValue=0)
     #plt.imshow(overlay)
-    plt.imshow(imagesDataSet[i, :, :], cmap='gray', vmin=0, vmax=0.5*np.max(imagesDataSet[i, :, :]))
-    plt.imshow(labelsDataSet[i, :, :], cmap='hot', alpha = 0.3)
-    plt.axis('off')
+    #plt.imshow(imagesDataSet[i, :, :], cmap='gray', vmin=0, vmax=0.5*np.max(imagesDataSet[i, :, :]))
+    #plt.imshow(labelsDataSet[i, :, :], cmap='hot', alpha = 0.3)
+    #plt.axis('off')
 
-plt.subplots_adjust(wspace=.05, hspace=.05)
+#plt.subplots_adjust(wspace=.05, hspace=.05)
 #plt.tight_layout()
-plt.savefig(outputPath + 'dataSet.png')
+#plt.savefig(outputPath + 'dataSet.png')
 
 
 # Add the channel dimension for compatibility:
@@ -147,13 +172,15 @@ indicesDevSet = range(int(sizeTrainingSet), sizeFullDataSet)
 trainingSet = dict([('input', imagesDataSet[indicesTrainingSet, :, :, :]), ('output', labelsDataSet[indicesTrainingSet, :, :, :])])
 devSet = dict([('input', imagesDataSet[indicesDevSet,:,:,:]), ('output', labelsDataSet[indicesDevSet,:,:,:])])
 
-
-
 print('Data set size. Training set: {0}. Dev set: {1}.'.format(trainingSet['input'].shape[0], devSet['input'].shape[0]))
 
 ####################### CREATE A U-NET MODEL #############################################
 # Create a UNET with one input and one output canal.
 unet = Unet(1, 1)
+
+if LoadModel:
+    unet.load_state_dict(torch.load(unetFilename, map_location=device))
+
 inp = torch.rand(1, 1, dataSetImageSize_voxels[0], dataSetImageSize_voxels[1])
 out = unet(inp)
 
@@ -167,11 +194,11 @@ criterion = nn.BCEWithLogitsLoss()
 optimizer = optim.Adam(unet.parameters(), lr=0.0001)
 
 # Number of  batches:
-batchSize = 2
+batchSize = 3
+devBatchSize = 3
 numBatches = np.round(trainingSet['input'].shape[0]/batchSize).astype(int)
-devNumBatches = np.round(devSet['input'].shape[0]/batchSize).astype(int)
+devNumBatches = np.round(devSet['input'].shape[0]/devBatchSize).astype(int)
 # Show results every printStep batches:
-printStep = 1
 plotStep_epochs = 1
 numImagesPerRow = batchSize
 if plotStep_epochs != math.inf:
@@ -198,17 +225,15 @@ lossValuesDevSetAllEpoch = []
 iter = 0
 deviter = 0
 
-
-
 torch.cuda.empty_cache()
 unet.to(device)
-for epoch in range(10):  # loop over the dataset multiple times
+for epoch in range(50):  # loop over the dataset multiple times
     epochNumbers.append(epoch)
 
     lossValuesTrainingSetEpoch = []
     lossValuesDevSetEpoch = []
 
-
+    scaler = torch.cuda.amp.GradScaler()
     unet.train(True)
     for i in range(numBatches):
         # get the inputs
@@ -219,10 +244,18 @@ for epoch in range(10):  # loop over the dataset multiple times
         optimizer.zero_grad()
 
         # forward + backward + optimize
-        outputs = unet(inputs)
-        loss = criterion(outputs, gt)
-        loss.backward()
-        optimizer.step()
+        if AMP:
+            with torch.cuda.amp.autocast(enabled=True, dtype=torch.float16, cache_enabled=True):
+                outputs = unet(inputs)
+                loss = criterion(outputs, gt)
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            outputs = unet(inputs)
+            loss = criterion(outputs, gt)
+            loss.backward()
+            optimizer.step()
 
         # print statistics
         # Save loss values:
@@ -234,24 +267,26 @@ for epoch in range(10):  # loop over the dataset multiple times
         #running_loss = 0.0
         # Update iteration number:
         iter = iter + 1
-        torch.cuda.empty_cache()
+        loss_csv(lossValuesTrainingSet, outputPath + 'TestDataIter.csv')
     lossValuesTrainingSetAllEpoch.append(np.mean(lossValuesTrainingSetEpoch))
 
     unet.train(False)
+    torch.cuda.empty_cache()
     for i in range(devNumBatches):
-        inputs = torch.from_numpy(devSet['input'][i * batchSize:(i + 1) * batchSize, :, :, :]).to(device)
-        gt = torch.from_numpy(devSet['output'][i * batchSize:(i + 1) * batchSize, :, :, :]).to(device)
+        with torch.no_grad():
+            inputs = torch.from_numpy(devSet['input'][i * devBatchSize:(i + 1) * devBatchSize, :, :, :]).to(device)
+            gt = torch.from_numpy(devSet['output'][i * devBatchSize:(i + 1) * devBatchSize, :, :, :]).to(device)
 
-        outputs = unet(inputs)
-        loss = criterion(outputs, gt)
-        loss.backward()
+            outputs = unet(inputs)
+            loss = criterion(outputs, gt)
+            #loss.backward()
 
-        lossValuesDevSet.append(loss.item())
-        lossValuesDevSetEpoch.append(loss.item())
+            lossValuesDevSet.append(loss.item())
+            lossValuesDevSetEpoch.append(loss.item())
 
-        iterationDevNumbers.append(deviter)
-        deviter = deviter + 1
-        torch.cuda.empty_cache()
+            iterationDevNumbers.append(deviter)
+            deviter = deviter + 1
+            loss_csv(lossValuesDevSet, outputPath + 'ValidDataIter.csv')
     avg_vloss = np.mean(lossValuesDevSetEpoch)
     lossValuesDevSetAllEpoch.append(avg_vloss)
 
@@ -263,13 +298,14 @@ for epoch in range(10):  # loop over the dataset multiple times
         plt.figure(figEpochs)
         # Show loss:
         plt.axes(axs_epochs[0])
-        plt.plot(np.arange(0, epoch + 1), lossValuesTrainingSetAllEpoch, label='Training Set')
+        plt.plot(np.arange(0, epoch + 1), lossValuesTrainingSetAllEpoch, label='Training Set', color='blue')
         plt.plot(np.arange(0.5, (epoch + 1)), lossValuesDevSetAllEpoch,
-                 label='Validation Set')  # Validation always shifted 0.5
+                 label='Validation Set', color='red')  # Validation always shifted 0.5
         plt.title('Training/Validation')
         axs_epochs[0].set_xlabel('Epochs')
         axs_epochs[0].set_ylabel('MSE')
-
+        if epoch == 0:
+            axs_epochs[0].legend()
         # Show input images:
         plt.axes(axs_epochs[1])
         imshow_from_torch(torchvision.utils.make_grid(inputs.cpu(), normalize=True, nrow=numImagesPerRow))
@@ -292,8 +328,8 @@ for epoch in range(10):  # loop over the dataset multiple times
             torchvision.utils.make_grid(outputsLabels.cpu().detach(), normalize=False, nrow=numImagesPerRow),
             ialpha=0.5, icmap='hot')
         axs_epochs[3].set_title('Ground Truth - Output Labels')
-        plt.draw()
-        plt.pause(0.0001)
+        #plt.draw()
+        #plt.pause(0.0001)
         plt.savefig(outputPath + 'model_training_epoch_{0}.png'.format(epoch))
 
     if avg_vloss < best_vloss:
@@ -308,7 +344,6 @@ torch.save(unet, outputPath + 'unetFullModel.pt')
 
 
 
-loss_csv(lossValuesDevSetAllEpoch, outputPath + 'ValidDataEpoch.csv')
-loss_csv(lossValuesTrainingSetAllEpoch, outputPath + 'TestDataEpoch.csv')
-loss_csv(lossValuesDevSet, outputPath + 'ValidDataIter.csv')
-loss_csv(lossValuesTrainingSet, outputPath + 'TestDataIter.csv')
+
+
+
