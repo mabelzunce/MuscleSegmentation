@@ -14,7 +14,7 @@ USE_COSINES_AND_ORIGIN = 1
 
 ############################## REGISTRATION PARAMETER FILES ######################
 similarityMetricForReg = 'NMI'
-parameterFilesPath = '..\\..\\Data\\Elastix\\'
+parameterFilesPath = '../../Data/Elastix/'
 paramFileRigid = 'Parameters_Rigid_' + similarityMetricForReg
 paramFileAffine = 'Parameters_Affine_' + similarityMetricForReg
 paramFileNonRigid = 'Parameters_BSpline_NCC_1000iters_2048samples'#Par0000bspline_500'
@@ -22,10 +22,10 @@ paramFileNonRigid = 'Parameters_BSpline_NCC_1000iters_2048samples'#Par0000bsplin
 rotationValues_deg = range(-10, 10+1, 5)
 ############################### IMAGES AVAILABLE ###################################
 atlasNamesImplantOrNotGood = ['7286867', '7291398', '7300327', '7393917', 'L0469978', 'L0483818', 'L0508687', 'L0554842']
-dataPath = '..\\..\\Data\\LumbarSpine2D\\Segmented\\' # Base data path.
-outputPath = '..\\..\\Data\\LumbarSpine2D\\TrainingSet\\' # Base data path.
-outputAugmentedLinearPath = '..\\..\\Data\\LumbarSpine2D\\TrainingSetAugmentedLinear\\' # Base data path.
-outputAugmentedNonLinearPath = '..\\..\\Data\\LumbarSpine2D\\TrainingSetAugmentedNonLinear\\' # Base data path.
+dataPath = '../../Data/LumbarSpine2D/Segmented/' # Base data path.
+outputPath = '../../Data/LumbarSpine2D/TrainingSet/' # Base data path.
+outputAugmentedLinearPath = '../../Data/LumbarSpine2D/TrainingSetAugmentedLinear/' # Base data path.
+outputAugmentedNonLinearPath = '../../Data/LumbarSpine2D/TrainingSetAugmentedNonLinear/' # Base data path.
 if not os.path.exists(outputPath):
     os.makedirs(outputPath)
 if not os.path.exists(outputAugmentedLinearPath):
@@ -46,7 +46,7 @@ atlasImageFilenames = [] # Filenames of the intensity images
 atlasLabelsFilenames = [] # Filenames of the label images
 folderIndex = []
 for folder in data:
-    auxPath = dataPath + folder + '\\'
+    auxPath = dataPath + folder + '/'
     files = os.listdir(auxPath)
     for filename in files:
         name, extension = os.path.splitext(filename)
@@ -113,8 +113,8 @@ for i in range(0, len(atlasNames)):
     transformixImageFilter.Execute()
     atlasSliceLabel = sitk.Cast(transformixImageFilter.GetResultImage(), sitk.sitkUInt8)
     # write the 2d images:
-    sitk.WriteImage(atlasSliceImage, outputPath + atlasNames[i] + '.' + extensionImages)
-    sitk.WriteImage(atlasSliceLabel, outputPath + atlasNames[i] + tagLabels + '.' + extensionImages)
+    sitk.WriteImage(atlasSliceImage, outputPath + atlasNames[i] + '.' + extensionImages, True)
+    sitk.WriteImage(atlasSliceLabel, outputPath + atlasNames[i] + tagLabels + '.' + extensionImages, True)
     # Show images:
     if DEBUG:
         slice = sitk.GetArrayFromImage(atlasSliceImage)
@@ -155,8 +155,8 @@ for i in range(0, len(atlasNames)):
                     atlasSliceLabelTransformed = swap_labels(atlasSliceLabelTransformed, label1=l, label2=l+1)
 
             # write the 2d images:
-            sitk.WriteImage(atlasSliceImageTransformed, outputAugmentedLinearPath + atlasNames[i] + '_refX' + str(reflectionX) + '_rotDeg' + str(rotAngle_deg) +'.' + extensionImages)
-            sitk.WriteImage(atlasSliceLabelTransformed, outputAugmentedLinearPath + atlasNames[i] + '_refX' + str(reflectionX) + '_rotDeg' + str(rotAngle_deg) +  tagLabels  + '.' + extensionImages)
+            sitk.WriteImage(atlasSliceImageTransformed, outputAugmentedLinearPath + atlasNames[i] + '_refX' + str(reflectionX) + '_rotDeg' + str(rotAngle_deg) +'.' + extensionImages, True)
+            sitk.WriteImage(atlasSliceLabelTransformed, outputAugmentedLinearPath + atlasNames[i] + '_refX' + str(reflectionX) + '_rotDeg' + str(rotAngle_deg) +  tagLabels  + '.' + extensionImages, True)
             # Show images:
             if DEBUG:
                 slice = sitk.GetArrayFromImage(atlasSliceImageTransformed)
@@ -197,8 +197,8 @@ for i in range(0, len(atlasNames)):
         transformixImageFilter.Execute()
         atlasSliceLabelDeformed = sitk.Cast(transformixImageFilter.GetResultImage(), sitk.sitkUInt8)
         # write the 2d images:
-        sitk.WriteImage(atlasSliceImageDeformed, outputAugmentedNonLinearPath + atlasNames[i] + '_' + atlasNames[j] + '.' + extensionImages)
-        sitk.WriteImage(atlasSliceLabelDeformed, outputAugmentedNonLinearPath + atlasNames[i] + '_' + atlasNames[j] + tagLabels + '.' + extensionImages)
+        sitk.WriteImage(atlasSliceImageDeformed, outputAugmentedNonLinearPath + atlasNames[i] + '_' + atlasNames[j] + '.' + extensionImages, True)
+        sitk.WriteImage(atlasSliceLabelDeformed, outputAugmentedNonLinearPath + atlasNames[i] + '_' + atlasNames[j] + tagLabels + '.' + extensionImages, True)
         # Show images:
         # slice = sitk.GetArrayFromImage(atlasSliceImageDeformed)
         # labels = sitk.GetArrayFromImage(atlasSliceLabelDeformed)

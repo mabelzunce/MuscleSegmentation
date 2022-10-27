@@ -59,7 +59,7 @@ tagLabels = '_labels'
 
 # Training/dev sets ratio, not using test set at the moment:
 trainingSetRelSize = 0.8
-devSetRelSize = 0.2
+devSetRelSize = 1 - trainingSetRelSize
 
 ######################### CHECK DEVICE ######################
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
