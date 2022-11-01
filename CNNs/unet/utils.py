@@ -48,8 +48,9 @@ def dice(reference, segmented):
 def dice2d(reference, segmented):
     if reference.shape != segmented.shape:
         return 0
-    ref = reference/reference.max()
-    seg = segmented/segmented.max()
+
+    ref = reference/(reference.max() + 1)
+    seg = segmented/(segmented.max() + 1)
     intersection = ref * seg
     score = (2 * intersection.sum())/(ref.sum() + seg.sum())
     return score
