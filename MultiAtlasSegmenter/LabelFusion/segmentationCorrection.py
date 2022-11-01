@@ -130,9 +130,7 @@ for i in range(numImagesToShow):
 
 plt.savefig(outputPath + 'dataSet.png')
 
-#imagesDataSet = []
-#autLabelsDataSet = []
-#manLabelsDataSet = []
+#mask3 = np.any(imagesDataSet, axis=1)
 
 # Add the channel dimension for compatibility: (1 solo canal)
 imagesDataSet = np.expand_dims(imagesDataSet, axis=1)
@@ -149,19 +147,29 @@ manLabelsDataSet = manLabelsDataSet.astype(np.float32)
 manLabelsDataSet[manLabelsDataSet!=4] = 0
 manLabelsDataSet[manLabelsDataSet==4] = 1
 
-mask = np.any(autLabelsDataSet==0, axis=0)
 ######################## TRAINING, VALIDATION AND TEST DATA SETS ###########################
+
+#eliminar las slices vacias
+
+mask = np.any(autLabelsDataSet, axis=(1,2,3))
+slicesToDelete = []
+for i in range (numSlices):
+    if mask[i]==False:
+        slicesToDelete.append(i)
+
+autLabelsDataSet = np.delete(autLabelsDataSet, slicesToDelete, axis=0)
+manLabelsDataSet = np.delete(manLabelsDataSet, slicesToDelete, axis=0)
+imagesDataSet = np.delete(imagesDataSet, slicesToDelete, axis=0)
+mask2 = np.any(autLabelsDataSet, axis=(1,2,3))
+
 # Get the number of images for the training and test data sets:
 sizeFullDataSet = int(imagesDataSet.shape[0])
 numberOfImagesPerCase = sizeFullDataSet / numberOfCases
 numberOfCasesForTrainingSet = round(numberOfCases*0.8)
-sizeTrainingSet = numberOfCasesForTrainingSet * numberOfImagesPerCase * 2
+sizeTrainingSet = numberOfCasesForTrainingSet * numberOfImagesPerCase
 indicesTrainingSet = range(0,int(sizeTrainingSet))
 sizeDevSet = sizeFullDataSet-sizeTrainingSet
 indicesDevSet = range(int(sizeTrainingSet), sizeFullDataSet)
-
-#eliminar cuando la suma de los valores de un slice den 0
-mask = np.any(autLabelsDataSet, axis=0)
 
 # Create dictionaries with training sets:
 trainingSet = dict([('input',inputDataSet[indicesTrainingSet,:,:,:]), ('output', manLabelsDataSet[indicesTrainingSet,:,:,:])])   #acá deberia agregar en imput el aut
@@ -173,6 +181,8 @@ print('Data set size. Training set: {0}. Dev set: {1}.'.format(trainingSet['inpu
 # Create a UNET with one input and one output canal.
 unet = Unet(2,1)
 
+inp = inputDataSet[indicesTrainingSet,:,:,:]
+out= manLabelsDataSet[indicesTrainingSet,:,:,:]
 ##
 print('Test Unet Input/Output sizes:\n Input size: {0}.\n Output shape: {1}'.format(inp.shape, out.shape))
 #tensorGroundTruth.shape
