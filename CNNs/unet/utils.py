@@ -37,20 +37,32 @@ def loss_csv(loss_vector, outpath):
         file.close()
 
 
-def dice(reference, segmented):
-    overlap_measures_filter = sitk.LabelOverlapMeasuresImageFilter()
-    overlap_measures_filter.SetGlobalDefaultCoordinateTolerance(1)
-    overlap_measures_filter.Execute(reference, segmented)
-    score = overlap_measures_filter.GetDiceCoefficient()
-    return score
-
-
 def dice2d(reference, segmented):
     if reference.shape != segmented.shape:
+        print('Error: shape')
         return 0
-    intersection = reference * segmented
-    if intersection.max() != 0:
-        score = (2 * intersection.sum())/(reference.sum() + segmented.sum())
+    tp = reference * segmented
+    if tp.max() != 0:
+        score = (2 * tp.sum())/(reference.sum() + segmented.sum())
     else:
+        print('Error: 0')
         score = 0
     return score
+
+
+def dice(reference, segmented):
+    if reference.shape != segmented.shape:
+        print('Error: shape')
+        return 0
+    reference = reference > 0
+    segmented = segmented > 0
+    tp = (reference * segmented) * 1
+    fn = (~segmented * reference) * 1
+    fp = (~reference * segmented) * 1
+    if tp.max() != 0:
+        score = (2 * tp.sum())/(2 * tp.sum() + fn.sum() + fp.sum())
+    else:
+        print('Error: 0')
+        score = 0
+    return score
+
