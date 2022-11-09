@@ -10,7 +10,6 @@ from datetime import datetime
 from utils import loss_csv
 from utils import imshow_from_torch
 from utils import dice
-from utils import dice2d
 from matplotlib import cm
 import torch
 import torchvision
@@ -60,7 +59,7 @@ tagLabels = '_labels'
 # imageSize_voxels = (256,256)
 
 # Training/dev sets ratio, not using test set at the moment:
-trainingSetRelSize = 0.5
+trainingSetRelSize = 0.6
 devSetRelSize = 1-trainingSetRelSize
 
 ######################### CHECK DEVICE ######################
@@ -224,7 +223,7 @@ labelsValidSet[labelsValidSet == 1] = 1
 #sizeTrainingSet = int(np.round(sizeFullDataSet*trainingSetRelSize))
 #sizeDevSet = sizeFullDataSet-sizeTrainingSet
 # Get random indices for the training set:
-rng = np.random.default_rng()
+#rng = np.random.default_rng()
 #indicesTrainingSet = rng.choice(int(sizeFullDataSet), int(sizeTrainingSet), replace=False)
 #indicesDevSet = np.delete(range(sizeFullDataSet), indicesTrainingSet)
 #indicesTrainingSet = range(0, int(sizeTrainingSet))
@@ -342,7 +341,7 @@ for epoch in range(50):  # loop over the dataset multiple times
         for k in range(batchSize):
             ref = reference[k, :, :, :]
             seg = labels[k, :, :, :]
-            diceScore = dice2d(ref, seg)
+            diceScore = dice(ref, seg)
             diceTraining.append(diceScore)
     diceTrainingEpoch.append(np.mean(diceTraining))
     print('Training Dice Score: %f ' % np.mean(diceTraining))
@@ -372,9 +371,9 @@ for epoch in range(50):  # loop over the dataset multiple times
         labels = (labels > 0.5) * 1
         labels = labels.numpy()
         for k in range(devBatchSize):
-            ref = reference[k, 0, :, :]
-            seg = labels[k, 0, :, :]
-            diceScore = dice2d(ref, seg)
+            ref = reference[k, :, :, :]
+            seg = labels[k, :, :, :]
+            diceScore = dice(ref, seg)
             diceValid.append(diceScore)
     diceValidEpoch.append(np.mean(diceValid))
     print('Valid Dice Score:  %f ' % np.mean(diceValid))
