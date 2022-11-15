@@ -10,6 +10,7 @@ from datetime import datetime
 from utils import create_csv
 from utils import imshow_from_torch
 from utils import dice
+from utils import maxProb
 from matplotlib import cm
 import torch
 import torchvision
@@ -272,10 +273,10 @@ for epoch in range(50):  # loop over the dataset multiple times
         iter = iter + 1
         create_csv(lossValuesTrainingSet, outputPath + 'TestLossIter.csv')
         reference = gt.cpu().numpy()
-        reference = reference.astype('int64')
+        reference = reference.astype('int32')
         labels = torch.sigmoid(outputs.cpu().to(torch.float32))
+        labels = maxProb(labels.detach().numpy(), multilabelNum)
         labels = (labels > 0.5) * 1
-        labels = labels.numpy()
         for k in range(batchSize):
             for j in range(multilabelNum):
                 ref = reference[k, j, :, :]

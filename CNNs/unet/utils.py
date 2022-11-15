@@ -66,3 +66,10 @@ def dice(reference, segmented):
     score = (2 * tp.sum())/(2 * tp.sum() + fn.sum() + fp.sum())
     return score
 
+
+def maxProb(image, numlabels):
+    outImage = np.zeros(image.shape)
+    indexImage = np.argmax(image, axis=1)
+    for k in range(numlabels):
+        outImage[:, k, :, :] = image[:, k, :, :] * (indexImage == k)
+    return outImage
