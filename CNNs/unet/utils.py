@@ -73,3 +73,8 @@ def maxProb(image, numlabels):
     for k in range(numlabels):
         outImage[:, k, :, :] = image[:, k, :, :] * (indexImage == k)
     return outImage
+
+
+def writeMhd(image, outpath):
+    img = sitk.GetImageFromArray(image)
+    sitk.WriteImage(img, outpath)
