@@ -75,6 +75,16 @@ def maxProb(image, numlabels):
     return outImage
 
 
+def multilabel(image, numlabels):
+    shape = image.shape
+    shape = list(shape)
+    shape.remove(numlabels)
+    outImage = np.zeros(shape)
+    for k in range(1, numlabels):
+        outImage = outImage + image[:, k, :, :] * k
+    return outImage
+
+
 def writeMhd(image, outpath):
     img = sitk.GetImageFromArray(image)
     sitk.WriteImage(img, outpath)
