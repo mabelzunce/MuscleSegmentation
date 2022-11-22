@@ -353,8 +353,8 @@ for epoch in range(50):  # loop over the dataset multiple times
     torch.cuda.empty_cache()
     for i in range(devNumBatches):
         with torch.no_grad():
-            inputs = torch.from_numpy(trainingSet['input'][i * batchSize:(i + 1) * batchSize, :, :, :]).to(device)
-            gt = torch.from_numpy(trainingSet['output'][i * batchSize:(i + 1) * batchSize, :, :, :]).to(device)
+            inputs = torch.from_numpy(devSet['input'][i * devBatchSize:(i + 1) * devBatchSize, :, :, :]).to(device)
+            gt = torch.from_numpy(devSet['output'][i * devBatchSize:(i + 1) * devBatchSize, :, :, :]).to(device)
 
             outputs = unet(inputs)
             loss = criterion(outputs, gt)

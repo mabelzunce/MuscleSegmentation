@@ -12,6 +12,7 @@ from utils import imshow_from_torch
 from utils import dice
 from utils import maxProb
 from utils import writeMhd
+from utils import multilabel
 from matplotlib import cm
 import torch
 import torchvision
@@ -36,7 +37,8 @@ import torchvision
 import torch.nn.functional as F
 from torchvision.utils import make_grid
 AMP = True
-LoadModel = False
+saveMhd = True
+LoadModel = True
 ############################ DATA PATHS ##############################################
 trainingSetPath = '..\\..\\Data\\LumbarSpine2D\\TrainingSet\\'
 outputPath = '..\\..\\Data\\LumbarSpine2D\\model\\'
@@ -126,11 +128,14 @@ for i in range(0, datasize):
     atlasImage = sitk.ReadImage(atlasImageFilenames[i])
     atlasLabels = sitk.ReadImage(atlasLabelsFilenames[i])
 
+    trainingSetShape = [trainingImagesNumber, atlasImage.GetSize()[1], atlasImage.GetSize()[0]]
+    validSetShape = [validImagesNumber, atlasImage.GetSize()[1], atlasImage.GetSize()[0]]
+
     if i == 0:
-        imagesTrainingSet = np.zeros([trainingImagesNumber, atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
-        labelsTrainingSet = np.zeros([trainingImagesNumber, atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
-        imagesValidSet = np.zeros([validImagesNumber, atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
-        labelsValidSet = np.zeros([validImagesNumber, atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
+        imagesTrainingSet = np.zeros(trainingSetShape)
+        labelsTrainingSet = np.zeros(trainingSetShape)
+        imagesValidSet = np.zeros(validSetShape)
+        labelsValidSet = np.zeros(validSetShape)
         # Size of each 2d image:
         dataSetImageSize_voxels = imagesTrainingSet.shape[1:3]  # obtiene el getsize[1 y 0]
 
@@ -143,8 +148,12 @@ for i in range(0, datasize):
         imagesValidSet[j, :, :] = np.reshape(sitk.GetArrayFromImage(atlasImage), [1, atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
         labelsValidSet[j, :, :] = np.reshape(sitk.GetArrayFromImage(atlasLabels), [1, atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
         j += 1
+if saveMhd:
+    writeMhd(imagesTrainingSet, outputPath + 'images_training_set.mhd')
+    writeMhd(labelsTrainingSet, outputPath + 'labels_training_set.mhd')
+    writeMhd(imagesValidSet, outputPath + 'images_valid_set.mhd')
+    writeMhd(labelsValidSet, outputPath + 'labels_valid_set.mhd')
 # Initialize numpy array and read data:
-
 print("Number of atlases images: {0}".format(len(atlasNames)))
 print("List of atlases: {0}\n".format(atlasNames))
 
@@ -195,10 +204,10 @@ numBatches = np.round(trainingSet['input'].shape[0]/batchSize).astype(int)
 devNumBatches = np.round(devSet['input'].shape[0]/devBatchSize).astype(int)
 # Show results every printStep batches:
 plotStep_epochs = 1
+saveImage_epochs = 1
 numImagesPerRow = batchSize
 if plotStep_epochs != math.inf:
-    figEpochs, axs_epochs = plt.subplots(1, 7)
-    figGraphs, axs_graphs = plt.subplots(1, 7)
+    figGraphs, axs_graphs = plt.subplots(1, 8, figsize=(15, 8))
 # Show dev set loss every showDevLossStep batches:
 #showDevLossStep = 1
 inputsDevSet = torch.from_numpy(devSet['input'])
@@ -230,6 +239,9 @@ torch.cuda.empty_cache()
 unet.to(device)
 for epoch in range(50):  # loop over the dataset multiple times
     epochNumbers.append(epoch)
+    if saveMhd:
+        outputTrainingImage = np.zeros(trainingSetShape)
+        outputValidImage = np.zeros(validSetShape)
 
     lossValuesTrainingSetEpoch = []
     lossValuesDevSetEpoch = []
@@ -278,6 +290,8 @@ for epoch in range(50):  # loop over the dataset multiple times
         segmentation = torch.sigmoid(outputs.cpu().to(torch.float32))
         segmentation = maxProb(segmentation.detach().numpy(), multilabelNum)
         segmentation = (segmentation > 0.5) * 1
+        if saveMhd:
+            outputTrainingImage[i*batchSize:(i+1)*batchSize] = multilabel(segmentation, multilabelNum)
         for k in range(batchSize):
             for j in range(multilabelNum):
                 lbl = label[k, j, :, :]
@@ -296,8 +310,8 @@ for epoch in range(50):  # loop over the dataset multiple times
     torch.cuda.empty_cache()
     for i in range(devNumBatches):
         with torch.no_grad():
-            inputs = torch.from_numpy(trainingSet['input'][i * batchSize:(i + 1) * batchSize, :, :, :]).to(device)
-            gt = torch.from_numpy(trainingSet['output'][i * batchSize:(i + 1) * batchSize, :, :, :]).to(device)
+            inputs = torch.from_numpy(devSet['input'][i * devBatchSize:(i + 1) * devBatchSize, :, :, :]).to(device)
+            gt = torch.from_numpy(devSet['output'][i * devBatchSize:(i + 1) * devBatchSize, :, :, :]).to(device)
             gt = F.one_hot(gt.to(torch.int64))
             gt = torch.squeeze(torch.transpose(gt, 1, 4), 4)
             gt = gt.float()
@@ -317,6 +331,8 @@ for epoch in range(50):  # loop over the dataset multiple times
         segmentation = torch.sigmoid(outputs.cpu().to(torch.float32))
         segmentation = maxProb(segmentation.detach().numpy(), multilabelNum)
         segmentation = (segmentation > 0.5) * 1
+        if saveMhd:
+            outputValidImage[i * devBatchSize:(i + 1) * devBatchSize] = multilabel(segmentation, multilabelNum)
         for k in range(devBatchSize):
             for j in range(multilabelNum):
                 lbl = label[k, j, :, :]
@@ -327,19 +343,50 @@ for epoch in range(50):  # loop over the dataset multiple times
         diceValidEpoch[j].append(np.mean(diceValid[j]))
         print('Valid Dice Score:  %f ' % np.mean(diceValid[j]))
     avg_vloss = np.mean(lossValuesDevSetEpoch)
+    print('avg_vloss: %f' % (avg_vloss))
     lossValuesDevSetAllEpoch.append(avg_vloss)
     for k in range(multilabelNum):
         create_csv(diceValidEpoch[k], outputPath + 'ValidDice' + str(k) + 'Epoch.csv')
     create_csv(lossValuesDevSetAllEpoch, outputPath + 'ValidLossEpoch.csv')
 
     if (epoch % plotStep_epochs) == (plotStep_epochs - 1):
-        # Get the labels from the outputs:
-        inputImage = inputs.cpu().numpy()
-        inputImage = inputImage.astype('int32')
-        for k in range(devBatchSize):
-            writeMhd(segmentation[k, :, :, :], outputPath + 'segmentation' + 'batch' + str(k) + '.mhd')
-            writeMhd(label[k, :, :, :], outputPath + 'gt' + 'batch' + str(k) + '.mhd')
-            writeMhd(inputImage[k, :, :], outputPath + 'image' + 'batch' + str(k) + '.mhd')
+        # Metrics Plot
+        plt.figure()
+        # Show loss:
+        plt.plot(np.arange(0, epoch + 1), lossValuesTrainingSetAllEpoch, label='Training Set', color='blue')
+        plt.plot(np.arange(0.5, (epoch + 1)), lossValuesDevSetAllEpoch,
+                 label='Validation Set', color='red')  # Validation always shifted 0.5
+        plt.title('Loss Values')
+        plt.xlabel('Epochs')
+        plt.ylabel('MSE')
+        if epoch == 0:
+            plt.legend()
+        plt.savefig(outputPath + 'model_training_loss.png')
+        plt.close()
+        for k in range(multilabelNum):
+            plt.figure()
+            # Show loss:
+            plt.plot(np.arange(0, epoch + 1), diceTrainingEpoch[k], label='Training Set', color='blue')
+            plt.plot(np.arange(0.5, (epoch + 1)), diceValidEpoch[k],
+                     label='Validation Set', color='red')  # Validation always shifted 0.5
+            plt.title('Dice Score label ' + str(k))
+            plt.xlabel('Epochs')
+            plt.ylabel('Dice')
+            if epoch == 0:
+                plt.legend()
+            plt.savefig(outputPath + 'model_training_Dice_' + str(k) + '.png')
+            plt.close()
+        # Save labels from the outputs:
+       #inputImage = inputs.cpu().numpy()
+        #inputImage = inputImage.astype('int32')
+        #for k in range(devBatchSize):
+        #    writeMhd(segmentation[k, :, :, :], outputPath + 'segmentation' + str(k) + '.mhd')
+        #    writeMhd(label[k, :, :, :], outputPath + 'gt' + str(k) + '.mhd')
+        #    writeMhd(inputImage[k, :, :], outputPath + 'image' + str(k) + '.mhd')
+
+    if ((epoch % saveImage_epochs) == (saveImage_epochs - 1)) and saveMhd:
+        writeMhd(outputTrainingImage,  outputPath + 'outputTrainingSet.mhd')
+        writeMhd(outputValidImage, outputPath + 'outputValidSet.mhd')
 
     if avg_vloss < best_vloss:
         best_vloss = avg_vloss
