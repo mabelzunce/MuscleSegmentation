@@ -45,11 +45,12 @@ def dice2d(reference, segmented):
     if reference.shape != segmented.shape:
         print('Error: shape')
         return 0
+    reference = (reference > 0) * 1
+    segmented = (segmented > 0) * 1
     tp = reference * segmented
     if tp.max() != 0:
         score = (2 * tp.sum())/(reference.sum() + segmented.sum())
     else:
-        print('Error: 0')
         score = 0
     return score
 
