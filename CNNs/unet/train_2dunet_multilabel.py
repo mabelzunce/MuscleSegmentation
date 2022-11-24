@@ -36,8 +36,8 @@ import torchvision
 import torch.nn.functional as F
 from torchvision.utils import make_grid
 AMP = True
-saveMhd = False
-LoadModel = False
+saveMhd = True
+LoadModel = True
 ############################ DATA PATHS ##############################################
 trainingSetPath = '..\\..\\Data\\LumbarSpine2D\\TrainingSet\\'
 outputPath = '..\\..\\Data\\LumbarSpine2D\\model\\'
@@ -204,7 +204,7 @@ numBatches = np.round(trainingSet['input'].shape[0]/batchSize).astype(int)
 devNumBatches = np.round(devSet['input'].shape[0]/devBatchSize).astype(int)
 # Show results every printStep batches:
 plotStep_epochs = 1
-saveImage_epochs = 5
+saveImage_epochs = 1
 numImagesPerRow = batchSize
 if plotStep_epochs != math.inf:
     figGraphs, axs_graphs = plt.subplots(1, 8, figsize=(15, 8))
@@ -377,7 +377,7 @@ for epoch in range(50):  # loop over the dataset multiple times
             plt.savefig(outputPath + 'model_training_Dice_' + str(k) + '.png')
             plt.close()
 
-    if ((epoch % saveImage_epochs) == (saveImage_epochs - 1)):
+    if (epoch % saveImage_epochs) == (saveImage_epochs - 1):
         writeMhd(outputTrainingSet,  outputPath + 'outputTrainingSet.mhd')
         writeMhd(outputValidSet, outputPath + 'outputValidSet.mhd')
 
