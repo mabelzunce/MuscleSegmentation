@@ -9,11 +9,10 @@ import math
 from datetime import datetime
 from utils import create_csv
 from utils import imshow_from_torch
-from utils import dice
+from utils import dice2d
 from utils import maxProb
 from utils import writeMhd
 from utils import multilabel
-from matplotlib import cm
 import torch
 import torchvision
 import torchvision.transforms as transforms
@@ -37,8 +36,8 @@ import torchvision
 import torch.nn.functional as F
 from torchvision.utils import make_grid
 AMP = True
-saveMhd = True
-LoadModel = True
+saveMhd = False
+LoadModel = False
 ############################ DATA PATHS ##############################################
 trainingSetPath = '..\\..\\Data\\LumbarSpine2D\\TrainingSet\\'
 outputPath = '..\\..\\Data\\LumbarSpine2D\\model\\'
@@ -194,6 +193,7 @@ print('Test Unet Input/Output sizes:\n Input size: {0}.\n Output shape: {1}'.for
 #tensorGroundTruth.shape
 ##################################### U-NET TRAINING ############################################
 # Loss and optimizer
+
 criterion = nn.BCEWithLogitsLoss()
 optimizer = optim.Adam(unet.parameters(), lr=0.0001)
 
@@ -204,7 +204,7 @@ numBatches = np.round(trainingSet['input'].shape[0]/batchSize).astype(int)
 devNumBatches = np.round(devSet['input'].shape[0]/devBatchSize).astype(int)
 # Show results every printStep batches:
 plotStep_epochs = 1
-saveImage_epochs = 1
+saveImage_epochs = 5
 numImagesPerRow = batchSize
 if plotStep_epochs != math.inf:
     figGraphs, axs_graphs = plt.subplots(1, 8, figsize=(15, 8))
@@ -240,8 +240,8 @@ unet.to(device)
 for epoch in range(50):  # loop over the dataset multiple times
     epochNumbers.append(epoch)
     if saveMhd:
-        outputTrainingImage = np.zeros(trainingSetShape)
-        outputValidImage = np.zeros(validSetShape)
+        outputTrainingSet = np.zeros(trainingSetShape)
+        outputValidSet = np.zeros(validSetShape)
 
     lossValuesTrainingSetEpoch = []
     lossValuesDevSetEpoch = []
@@ -275,7 +275,6 @@ for epoch in range(50):  # loop over the dataset multiple times
             loss.backward()
             optimizer.step()
 
-        # print statistics
         # Save loss values:
         lossValuesTrainingSet.append(loss.item())
         lossValuesTrainingSetEpoch.append(loss.item())
@@ -291,12 +290,12 @@ for epoch in range(50):  # loop over the dataset multiple times
         segmentation = maxProb(segmentation.detach().numpy(), multilabelNum)
         segmentation = (segmentation > 0.5) * 1
         if saveMhd:
-            outputTrainingImage[i*batchSize:(i+1)*batchSize] = multilabel(segmentation, multilabelNum)
+            outputTrainingSet[i*batchSize:(i+1)*batchSize] = multilabel(segmentation, multilabelNum)
         for k in range(batchSize):
             for j in range(multilabelNum):
                 lbl = label[k, j, :, :]
                 seg = segmentation[k, j, :, :]
-                diceScore = dice(lbl, seg)
+                diceScore = dice2d(lbl, seg)
                 diceTraining[j].append(diceScore)
     for j in range(multilabelNum):
         diceTrainingEpoch[j].append(np.mean(diceTraining[j]))
@@ -332,19 +331,20 @@ for epoch in range(50):  # loop over the dataset multiple times
         segmentation = maxProb(segmentation.detach().numpy(), multilabelNum)
         segmentation = (segmentation > 0.5) * 1
         if saveMhd:
-            outputValidImage[i * devBatchSize:(i + 1) * devBatchSize] = multilabel(segmentation, multilabelNum)
+            outputValidSet[i * devBatchSize:(i + 1) * devBatchSize] = multilabel(segmentation, multilabelNum)
         for k in range(devBatchSize):
             for j in range(multilabelNum):
                 lbl = label[k, j, :, :]
                 seg = segmentation[k, j, :, :]
-                diceScore = dice(lbl, seg)
+                diceScore = dice2d(lbl, seg)
                 diceValid[j].append(diceScore)
     for j in range(multilabelNum):
         diceValidEpoch[j].append(np.mean(diceValid[j]))
         print('Valid Dice Score:  %f ' % np.mean(diceValid[j]))
+
     avg_vloss = np.mean(lossValuesDevSetEpoch)
-    print('avg_vloss: %f' % (avg_vloss))
     lossValuesDevSetAllEpoch.append(avg_vloss)
+    print('avg_vloss: %f' % avg_vloss)
     for k in range(multilabelNum):
         create_csv(diceValidEpoch[k], outputPath + 'ValidDice' + str(k) + 'Epoch.csv')
     create_csv(lossValuesDevSetAllEpoch, outputPath + 'ValidLossEpoch.csv')
@@ -354,11 +354,11 @@ for epoch in range(50):  # loop over the dataset multiple times
         plt.figure()
         # Show loss:
         plt.plot(np.arange(0, epoch + 1), lossValuesTrainingSetAllEpoch, label='Training Set', color='blue')
-        plt.plot(np.arange(0.5, (epoch + 1)), lossValuesDevSetAllEpoch,
+        plt.plot(np.arange(0, epoch + 1), lossValuesDevSetAllEpoch,
                  label='Validation Set', color='red')  # Validation always shifted 0.5
         plt.title('Loss Values')
         plt.xlabel('Epochs')
-        plt.ylabel('MSE')
+        plt.ylabel('Loss')
         if epoch == 0:
             plt.legend()
         plt.savefig(outputPath + 'model_training_loss.png')
@@ -376,17 +376,10 @@ for epoch in range(50):  # loop over the dataset multiple times
                 plt.legend()
             plt.savefig(outputPath + 'model_training_Dice_' + str(k) + '.png')
             plt.close()
-        # Save labels from the outputs:
-       #inputImage = inputs.cpu().numpy()
-        #inputImage = inputImage.astype('int32')
-        #for k in range(devBatchSize):
-        #    writeMhd(segmentation[k, :, :, :], outputPath + 'segmentation' + str(k) + '.mhd')
-        #    writeMhd(label[k, :, :, :], outputPath + 'gt' + str(k) + '.mhd')
-        #    writeMhd(inputImage[k, :, :], outputPath + 'image' + str(k) + '.mhd')
 
-    if ((epoch % saveImage_epochs) == (saveImage_epochs - 1)) and saveMhd:
-        writeMhd(outputTrainingImage,  outputPath + 'outputTrainingSet.mhd')
-        writeMhd(outputValidImage, outputPath + 'outputValidSet.mhd')
+    if ((epoch % saveImage_epochs) == (saveImage_epochs - 1)):
+        writeMhd(outputTrainingSet,  outputPath + 'outputTrainingSet.mhd')
+        writeMhd(outputValidSet, outputPath + 'outputValidSet.mhd')
 
     if avg_vloss < best_vloss:
         best_vloss = avg_vloss
