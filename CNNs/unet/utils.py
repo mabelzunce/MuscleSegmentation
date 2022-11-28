@@ -81,11 +81,24 @@ def multilabel(image, numlabels):
     shape = list(shape)
     shape.remove(numlabels)
     outImage = np.zeros(shape)
-    for k in range(1, numlabels):
-        outImage = outImage + image[:, k, :, :] * k
+    for k in range(numlabels):
+        outImage = outImage + image[:, k, :, :] * (k+1)
     return outImage
 
 
 def writeMhd(image, outpath):
     img = sitk.GetImageFromArray(image)
     sitk.WriteImage(img, outpath)
+
+
+def boxplot(data, xlabel, outpath):
+    plt.figure()
+    plt.boxplot(data,
+                labels=xlabel)
+    if 'training' in outpath:
+        plt.title('Training Dice Boxplot')
+    else:
+        plt.title('Valid Dice Boxplot')
+    plt.ylabel('Dice')
+    plt.savefig(outpath)
+    plt.close()

@@ -13,6 +13,7 @@ from utils import dice2d
 from utils import maxProb
 from utils import writeMhd
 from utils import multilabel
+from utils import boxplot
 import torch
 import torchvision
 import torchvision.transforms as transforms
@@ -36,7 +37,8 @@ import torchvision
 import torch.nn.functional as F
 from torchvision.utils import make_grid
 AMP = True
-saveMhd = True
+saveMhd = False
+saveDataSetMhd = False
 LoadModel = True
 ############################ DATA PATHS ##############################################
 trainingSetPath = '..\\..\\Data\\LumbarSpine2D\\TrainingSet\\'
@@ -147,7 +149,7 @@ for i in range(0, datasize):
         imagesValidSet[j, :, :] = np.reshape(sitk.GetArrayFromImage(atlasImage), [1, atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
         labelsValidSet[j, :, :] = np.reshape(sitk.GetArrayFromImage(atlasLabels), [1, atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
         j += 1
-if saveMhd:
+if saveDataSetMhd:
     writeMhd(imagesTrainingSet, outputPath + 'images_training_set.mhd')
     writeMhd(labelsTrainingSet, outputPath + 'labels_training_set.mhd')
     writeMhd(imagesValidSet, outputPath + 'images_valid_set.mhd')
@@ -180,7 +182,7 @@ print('Data set size. Training set: {0}. Dev set: {1}.'.format(trainingSet['inpu
 
 ####################### CREATE A U-NET MODEL #############################################
 # Create a UNET with one input and one output canal.
-unet = Unet(1, 7)
+unet = Unet(1, 6)
 
 if LoadModel:
     unet.load_state_dict(torch.load(unetFilename, map_location=device))
@@ -215,7 +217,7 @@ gtDevSet = torch.from_numpy(devSet['output'])
 # Train
 best_vloss = 1000
 
-multilabelNum = 7
+multilabelNum = 6
 
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
@@ -257,6 +259,7 @@ for epoch in range(50):  # loop over the dataset multiple times
         gt = torch.from_numpy(trainingSet['output'][i*batchSize:(i+1)*batchSize,:,:,:]).to(device)
         gt = F.one_hot(gt.to(torch.int64))
         gt = torch.squeeze(torch.transpose(gt, 1, 4), 4)
+        gt = gt[:, 1:, :, :]
         gt = gt.float()
         # zero the parameter gradients
         optimizer.zero_grad()
@@ -300,7 +303,11 @@ for epoch in range(50):  # loop over the dataset multiple times
     for j in range(multilabelNum):
         diceTrainingEpoch[j].append(np.mean(diceTraining[j]))
         print('Training Dice Score: %f ' % np.mean(diceTraining[j]))
-    lossValuesTrainingSetAllEpoch.append(np.mean(lossValuesTrainingSetEpoch))
+
+    avg_tloss = np.mean(lossValuesTrainingSetEpoch)
+    lossValuesTrainingSetAllEpoch.append(avg_tloss)
+    print('avg_tloss: %f' % avg_tloss)
+
     for k in range(multilabelNum):
         create_csv(diceTrainingEpoch[k], outputPath + 'TrainingDice' + str(k) + 'Epoch.csv')
     create_csv(lossValuesTrainingSetAllEpoch, outputPath + 'TestLossEpoch.csv')
@@ -313,6 +320,7 @@ for epoch in range(50):  # loop over the dataset multiple times
             gt = torch.from_numpy(devSet['output'][i * devBatchSize:(i + 1) * devBatchSize, :, :, :]).to(device)
             gt = F.one_hot(gt.to(torch.int64))
             gt = torch.squeeze(torch.transpose(gt, 1, 4), 4)
+            gt = gt[:, 1:, :, :]
             gt = gt.float()
 
             outputs = unet(inputs)
@@ -345,6 +353,7 @@ for epoch in range(50):  # loop over the dataset multiple times
     avg_vloss = np.mean(lossValuesDevSetEpoch)
     lossValuesDevSetAllEpoch.append(avg_vloss)
     print('avg_vloss: %f' % avg_vloss)
+
     for k in range(multilabelNum):
         create_csv(diceValidEpoch[k], outputPath + 'ValidDice' + str(k) + 'Epoch.csv')
     create_csv(lossValuesDevSetAllEpoch, outputPath + 'ValidLossEpoch.csv')
@@ -353,8 +362,8 @@ for epoch in range(50):  # loop over the dataset multiple times
         # Metrics Plot
         plt.figure()
         # Show loss:
-        plt.plot(np.arange(0, epoch + 1), lossValuesTrainingSetAllEpoch, label='Training Set', color='blue')
-        plt.plot(np.arange(0, epoch + 1), lossValuesDevSetAllEpoch,
+        plt.plot(np.arange(0, epoch), lossValuesTrainingSetAllEpoch, label='Training Set', color='blue')
+        plt.plot(np.arange(0, epoch), lossValuesDevSetAllEpoch,
                  label='Validation Set', color='red')  # Validation always shifted 0.5
         plt.title('Loss Values')
         plt.xlabel('Epochs')
@@ -363,11 +372,18 @@ for epoch in range(50):  # loop over the dataset multiple times
             plt.legend()
         plt.savefig(outputPath + 'model_training_loss.png')
         plt.close()
+        # Training boxplot:
+        boxplot(diceTraining, xlabel=['LM', 'RM', 'LQ', 'RQ', 'LP', 'RP'],
+                outpath=(outputPath + 'trainingBoxplotEpoch_{}.png'.format(epoch)))
+        #Valid Boxplot
+        boxplot(diceValid, xlabel=['LM', 'RM', 'LQ', 'RQ', 'LP', 'RP'],
+                outpath=(outputPath + 'ValidBoxplotEpoch.png'.format(epoch)))
+
         for k in range(multilabelNum):
             plt.figure()
             # Show loss:
             plt.plot(np.arange(0, epoch + 1), diceTrainingEpoch[k], label='Training Set', color='blue')
-            plt.plot(np.arange(0.5, (epoch + 1)), diceValidEpoch[k],
+            plt.plot(np.arange(0, (epoch + 1)), diceValidEpoch[k],
                      label='Validation Set', color='red')  # Validation always shifted 0.5
             plt.title('Dice Score label ' + str(k))
             plt.xlabel('Epochs')
@@ -377,15 +393,19 @@ for epoch in range(50):  # loop over the dataset multiple times
             plt.savefig(outputPath + 'model_training_Dice_' + str(k) + '.png')
             plt.close()
 
-    if (epoch % saveImage_epochs) == (saveImage_epochs - 1):
-        writeMhd(outputTrainingSet,  outputPath + 'outputTrainingSet.mhd')
-        writeMhd(outputValidSet, outputPath + 'outputValidSet.mhd')
-
-    if avg_vloss < best_vloss:
+    if (avg_vloss < best_vloss):
         best_vloss = avg_vloss
         print('[validation Epoch: %d] best_vloss: %.3f' % (epoch, best_vloss))
         modelPath = outputPath + 'unet' + '_{}_{}_best_fit'.format(timestamp, epoch) + '.pt'
         torch.save(unet.state_dict(), modelPath)
+        #boxplot:
+        boxplot(diceTraining, xlabel=['LM', 'RM', 'LQ', 'RQ', 'LP', 'RP'],
+                outpath=(outputPath + 'trainingBoxplotEpoch_{}.png'.format(epoch)))
+        boxplot(diceValid, xlabel=['LM', 'RM', 'LQ', 'RQ', 'LP', 'RP'],
+                outpath=(outputPath + 'ValidBoxplotEpoch.png_{}'.format(epoch)))
+        if saveMhd:
+            writeMhd(outputTrainingSet, outputPath + 'outputTrainingSet_{}.mhd'.format(epoch))
+            writeMhd(outputValidSet, outputPath + 'outputValidSet_{}.mhd'.format(epoch))
 
 print('Finished Training')
 torch.save(unet.state_dict(), outputPath + 'unet.pt')
