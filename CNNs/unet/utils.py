@@ -91,14 +91,11 @@ def writeMhd(image, outpath):
     sitk.WriteImage(img, outpath)
 
 
-def boxplot(data, xlabel, outpath):
+def boxplot(data, xlabel, outpath, yscale, title):
     plt.figure()
-    plt.boxplot(data,
-                labels=xlabel)
-    if 'training' in outpath:
-        plt.title('Training Dice Boxplot')
-    else:
-        plt.title('Valid Dice Boxplot')
-    plt.ylabel('Dice')
+    plt.boxplot(data, labels=xlabel)
+    plt.title(title)
+    plt.ylim(yscale)
+    plt.ylabel('Dice score')
     plt.savefig(outpath)
     plt.close()
