@@ -36,10 +36,20 @@ import torchvision
 
 import torch.nn.functional as F
 from torchvision.utils import make_grid
+
+
+class Augment(enumerate):
+    NA = 0  # No Augment
+    NL = 1  # Non linear
+    A = 2  # Augmented
+
+
 AMP = True              # Mixed Precision for larger batches and faster training
 saveMhd = True          # Saves a mhd file for the output
-saveDataSetMhd = True # Saves a Mhd file of the images and labels from dataset
-LoadModel = False       # Pretrained model
+saveDataSetMhd = False   # Saves a Mhd file of the images and labels from dataset
+LoadModel = False     # Pretrained model
+AugmentedTrainingSet = Augment.A
+Boxplot = True
 ############################ DATA PATHS ##############################################
 trainingSetPath = '..\\..\\Data\\LumbarSpine2D\\TrainingSet\\'
 outputPath = '..\\..\\Data\\LumbarSpine2D\\model\\'
@@ -64,7 +74,7 @@ tagLabels = '_labels'
 # imageSize_voxels = (256,256)
 
 # Training/dev sets ratio, not using test set at the moment:
-trainingSetRelSize = 0.69           # equals to a 0.8 rel
+trainingSetRelSize = 0.6
 devSetRelSize = 1-trainingSetRelSize
 
 ######################### CHECK DEVICE ######################
@@ -116,22 +126,32 @@ tNum = int(np.round(numSubjects * trainingSetRelSize))
 vNum = int(np.round(numSubjects * devSetRelSize))
 trainingSubjects = subjects[:tNum]
 validSubjects = subjects[tNum:]
+match AugmentedTrainingSet:
+    case 1:
+        tNum = (tNum * tNum)
+    case 2:
+        tNum = (tNum + numRot) * tNum
 
-trainingImagesNumber = (tNum + numRot) * tNum
-validImagesNumber = (vNum + numRot) * vNum
 k = 0
 j = 0
 # Data set avoids mixing same subject images
 for i in range(0, datasize):
     name1, name2 = atlasNames[i].split('_')[:2]
-    condition1 = (trainingSubjects.__contains__(name1)) and (not (validSubjects.__contains__(name2)))
-    condition2 = (validSubjects.__contains__(name1)) and (not (trainingSubjects.__contains__(name2)))
+    match AugmentedTrainingSet:
+        case 0:
+            condition1 = (trainingSubjects.__contains__(name1)) and (name2 == name1)
+        case 1:
+            condition1 = (trainingSubjects.__contains__(name1)) and (trainingSubjects.__contains__(name2))
+        case 2:
+            condition1 = (trainingSubjects.__contains__(name1)) and (not (validSubjects.__contains__(name2)))
+
+    condition2 = (validSubjects.__contains__(name1)) and (name2 == name1)
 
     atlasImage = sitk.ReadImage(atlasImageFilenames[i])
     atlasLabels = sitk.ReadImage(atlasLabelsFilenames[i])
 
-    trainingSetShape = [trainingImagesNumber, atlasImage.GetSize()[1], atlasImage.GetSize()[0]]
-    validSetShape = [validImagesNumber, atlasImage.GetSize()[1], atlasImage.GetSize()[0]]
+    trainingSetShape = [tNum, atlasImage.GetSize()[1], atlasImage.GetSize()[0]]
+    validSetShape = [vNum, atlasImage.GetSize()[1], atlasImage.GetSize()[0]]
 
     if i == 0:
         imagesTrainingSet = np.zeros(trainingSetShape)
@@ -151,9 +171,9 @@ for i in range(0, datasize):
         labelsValidSet[j, :, :] = np.reshape(sitk.GetArrayFromImage(atlasLabels), [1, atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
         j += 1
 if saveDataSetMhd:
-    writeMhd(imagesTrainingSet.astype(np.uint32), outputPath + 'images_training_set.mhd')
+    writeMhd(imagesTrainingSet.astype(np.float32), outputPath + 'images_training_set.mhd')
     writeMhd(labelsTrainingSet.astype(np.uint8), outputPath + 'labels_training_set.mhd')
-    writeMhd(imagesValidSet.astype(np.uint32), outputPath + 'images_valid_set.mhd')
+    writeMhd(imagesValidSet.astype(np.float32), outputPath + 'images_valid_set.mhd')
     writeMhd(labelsValidSet.astype(np.uint8), outputPath + 'labels_valid_set.mhd')
 # Initialize numpy array and read data:
 print("Number of atlases images: {0}".format(len(atlasNames)))
@@ -203,8 +223,8 @@ optimizer = optim.Adam(unet.parameters(), lr=0.0001)
 # Number of  batches:
 batchSize = 3
 devBatchSize = 3
-numBatches = np.round(trainingSet['input'].shape[0]/batchSize).astype(int)
-devNumBatches = np.round(devSet['input'].shape[0]/devBatchSize).astype(int)
+numBatches = np.ceil(trainingSet['input'].shape[0]/batchSize).astype(int)
+devNumBatches = np.ceil(devSet['input'].shape[0]/devBatchSize).astype(int)
 # Show results every printStep batches:
 plotStep_epochs = 1
 saveImage_epochs = 1
@@ -220,7 +240,7 @@ best_vloss = 1000
 
 multilabelNum = 6
 skip_plot = 5           # early epoch loss values tend to hide later values
-skip_mhd = 10           # avoids saving dataset images for the early epochs
+skip_model = 10              # avoids saving dataset images for the early epochs
 
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
@@ -389,22 +409,23 @@ for epoch in range(50):  # loop over the dataset multiple times
             plt.savefig(outputPath + 'model_training_Dice_' + labelNames[k] + '.png')
             plt.close()
 
-    if (avg_vloss < best_vloss) and (epoch >= skip_mhd):
+    if (avg_vloss < best_vloss) and (epoch >= skip_model):
         best_vloss = avg_vloss
         print('[validation Epoch: %d] best_vloss: %.3f' % (epoch, best_vloss))
-        modelPath = outputPath + 'unet' + '_{}_{}_best_fit'.format(timestamp, epoch) + '.pt'
+        modelPath = outputPath + 'unet_{}_{}_best_fit'.format(timestamp, epoch) + '.pt'
         torch.save(unet.state_dict(), modelPath)
         #boxplot:
-        boxplot(diceTraining, xlabel=['LM', 'RM', 'LQ', 'RQ', 'LP', 'RP'],
-                outpath=(outputPath + 'trainingBoxplot_{}.png'.format(epoch)), yscale=[0, 1], title='Training Dice Scores')
-        boxplot(diceTraining, xlabel=['LM', 'RM', 'LQ', 'RQ', 'LP', 'RP'],
-                outpath=(outputPath + 'trainingBoxplot_shortScale_{}.png'.format(epoch)), yscale=[0.7, 1.0], title='Training Dice Scores')
-        boxplot(diceValid, xlabel=['LM', 'RM', 'LQ', 'RQ', 'LP', 'RP'],
-                outpath=(outputPath + 'validBoxplot_{}.png'.format(epoch)), yscale=[0, 1], title='Validation Dice Scores')
-        for k in range(multilabelNum):
-            boxplot(data=(diceTraining[k], diceValid[k]),
-                    xlabel=['Training Set', 'Valid Set'], outpath=(outputPath + labelNames[k] + '_boxplot_{}.png'.format(epoch)),
-                    yscale=[np.round(np.min(diceValid[k]), decimals=1)-0.1, 1.0], title=labelNames[k] + ' Dice Scores')
+        if Boxplot:
+            boxplot(diceTraining, xlabel=['LM', 'RM', 'LQ', 'RQ', 'LP', 'RP'],
+                    outpath=(outputPath + 'trainingBoxplot.png'), yscale=[0, 1], title='Training Dice Scores')
+            boxplot(diceTraining, xlabel=['LM', 'RM', 'LQ', 'RQ', 'LP', 'RP'],
+                    outpath=(outputPath + 'trainingBoxplot_shortScale.png'), yscale=[0.7, 1.0], title='Training Dice Scores')
+            boxplot(diceValid, xlabel=['LM', 'RM', 'LQ', 'RQ', 'LP', 'RP'],
+                    outpath=(outputPath + 'validBoxplot.png'), yscale=[0, 1], title='Validation Dice Scores')
+            for k in range(multilabelNum):
+                boxplot(data=(diceTraining[k], diceValid[k]),
+                        xlabel=['Training Set', 'Valid Set'], outpath=(outputPath + labelNames[k] + '_boxplot.png'),
+                        yscale=[np.round(min(diceValid[k]), decimals=1) - 0.05, 1.0], title=labelNames[k]+'Dice Scores')
         if saveMhd:
             writeMhd(outputTrainingSet.astype(np.uint8), outputPath + 'outputTrainingSet.mhd')
             writeMhd(outputValidSet.astype(np.uint8), outputPath + 'outputValidSet.mhd')
