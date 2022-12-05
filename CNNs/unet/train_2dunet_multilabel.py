@@ -36,10 +36,20 @@ import torchvision
 
 import torch.nn.functional as F
 from torchvision.utils import make_grid
-AMP = True
-saveMhd = False
-saveDataSetMhd = False
-LoadModel = True
+
+
+class Augment(enumerate):
+    NA = 0  # No Augment
+    NL = 1  # Non linear
+    A = 2  # Augmented
+
+
+AMP = True              # Mixed Precision for larger batches and faster training
+saveMhd = True          # Saves a mhd file for the output
+saveDataSetMhd = False   # Saves a Mhd file of the images and labels from dataset
+LoadModel = False     # Pretrained model
+AugmentedTrainingSet = Augment.A
+Boxplot = True
 ############################ DATA PATHS ##############################################
 trainingSetPath = '..\\..\\Data\\LumbarSpine2D\\TrainingSet\\'
 outputPath = '..\\..\\Data\\LumbarSpine2D\\model\\'
@@ -116,21 +126,32 @@ tNum = int(np.round(numSubjects * trainingSetRelSize))
 vNum = int(np.round(numSubjects * devSetRelSize))
 trainingSubjects = subjects[:tNum]
 validSubjects = subjects[tNum:]
+match AugmentedTrainingSet:
+    case 1:
+        tNum = (tNum * tNum)
+    case 2:
+        tNum = (tNum + numRot) * tNum
 
-trainingImagesNumber = (tNum + numRot) * tNum
-validImagesNumber = (vNum + numRot) * vNum
 k = 0
 j = 0
+# Data set avoids mixing same subject images
 for i in range(0, datasize):
     name1, name2 = atlasNames[i].split('_')[:2]
-    condition1 = (trainingSubjects.__contains__(name1)) and (not (validSubjects.__contains__(name2)))
-    condition2 = (validSubjects.__contains__(name1)) and (not (trainingSubjects.__contains__(name2)))
+    match AugmentedTrainingSet:
+        case 0:
+            condition1 = (trainingSubjects.__contains__(name1)) and (name2 == name1)
+        case 1:
+            condition1 = (trainingSubjects.__contains__(name1)) and (trainingSubjects.__contains__(name2))
+        case 2:
+            condition1 = (trainingSubjects.__contains__(name1)) and (not (validSubjects.__contains__(name2)))
+
+    condition2 = (validSubjects.__contains__(name1)) and (name2 == name1)
 
     atlasImage = sitk.ReadImage(atlasImageFilenames[i])
     atlasLabels = sitk.ReadImage(atlasLabelsFilenames[i])
 
-    trainingSetShape = [trainingImagesNumber, atlasImage.GetSize()[1], atlasImage.GetSize()[0]]
-    validSetShape = [validImagesNumber, atlasImage.GetSize()[1], atlasImage.GetSize()[0]]
+    trainingSetShape = [tNum, atlasImage.GetSize()[1], atlasImage.GetSize()[0]]
+    validSetShape = [vNum, atlasImage.GetSize()[1], atlasImage.GetSize()[0]]
 
     if i == 0:
         imagesTrainingSet = np.zeros(trainingSetShape)
@@ -150,10 +171,10 @@ for i in range(0, datasize):
         labelsValidSet[j, :, :] = np.reshape(sitk.GetArrayFromImage(atlasLabels), [1, atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
         j += 1
 if saveDataSetMhd:
-    writeMhd(imagesTrainingSet, outputPath + 'images_training_set.mhd')
-    writeMhd(labelsTrainingSet, outputPath + 'labels_training_set.mhd')
-    writeMhd(imagesValidSet, outputPath + 'images_valid_set.mhd')
-    writeMhd(labelsValidSet, outputPath + 'labels_valid_set.mhd')
+    writeMhd(imagesTrainingSet.astype(np.float32), outputPath + 'images_training_set.mhd')
+    writeMhd(labelsTrainingSet.astype(np.uint8), outputPath + 'labels_training_set.mhd')
+    writeMhd(imagesValidSet.astype(np.float32), outputPath + 'images_valid_set.mhd')
+    writeMhd(labelsValidSet.astype(np.uint8), outputPath + 'labels_valid_set.mhd')
 # Initialize numpy array and read data:
 print("Number of atlases images: {0}".format(len(atlasNames)))
 print("List of atlases: {0}\n".format(atlasNames))
@@ -181,7 +202,7 @@ devSet = dict([('input', imagesValidSet[:, :, :, :]), ('output', labelsValidSet[
 print('Data set size. Training set: {0}. Dev set: {1}.'.format(trainingSet['input'].shape[0], devSet['input'].shape[0]))
 labelNames = ('Left_Multifidus', 'Right_Multifidus', 'Left_Quadratus', 'Right_Quadratus', 'Left_Psoas', 'Right_Psoas' )
 ####################### CREATE A U-NET MODEL #############################################
-# Create a UNET with one input and one output canal.
+# Create a UNET with one input and multiple output canal.
 unet = Unet(1, 6)
 
 if LoadModel:
@@ -202,8 +223,8 @@ optimizer = optim.Adam(unet.parameters(), lr=0.0001)
 # Number of  batches:
 batchSize = 3
 devBatchSize = 3
-numBatches = np.round(trainingSet['input'].shape[0]/batchSize).astype(int)
-devNumBatches = np.round(devSet['input'].shape[0]/devBatchSize).astype(int)
+numBatches = np.ceil(trainingSet['input'].shape[0]/batchSize).astype(int)
+devNumBatches = np.ceil(devSet['input'].shape[0]/devBatchSize).astype(int)
 # Show results every printStep batches:
 plotStep_epochs = 1
 saveImage_epochs = 1
@@ -218,6 +239,8 @@ gtDevSet = torch.from_numpy(devSet['output'])
 best_vloss = 1000
 
 multilabelNum = 6
+skip_plot = 5           # early epoch loss values tend to hide later values
+skip_model = 10              # avoids saving dataset images for the early epochs
 
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
@@ -255,8 +278,8 @@ for epoch in range(50):  # loop over the dataset multiple times
     unet.train(True)
     for i in range(numBatches):
         # get the inputs
-        inputs = torch.from_numpy(trainingSet['input'][i*batchSize:(i+1)*batchSize,:,:,:]).to(device)
-        gt = torch.from_numpy(trainingSet['output'][i*batchSize:(i+1)*batchSize,:,:,:]).to(device)
+        inputs = torch.from_numpy(trainingSet['input'][i*batchSize:(i+1)*batchSize, :, :, :]).to(device)
+        gt = torch.from_numpy(trainingSet['output'][i*batchSize:(i+1)*batchSize, :, :, :]).to(device)
         gt = F.one_hot(gt.to(torch.int64))
         gt = torch.squeeze(torch.transpose(gt, 1, 4), 4)
         gt = gt[:, 1:, :, :]
@@ -294,7 +317,7 @@ for epoch in range(50):  # loop over the dataset multiple times
         segmentation = (segmentation > 0.5) * 1
         if saveMhd:
             outputTrainingSet[i*batchSize:(i+1)*batchSize] = multilabel(segmentation, multilabelNum)
-        for k in range(batchSize):
+        for k in range(label.shape[0]):
             for j in range(multilabelNum):
                 lbl = label[k, j, :, :]
                 seg = segmentation[k, j, :, :]
@@ -340,7 +363,7 @@ for epoch in range(50):  # loop over the dataset multiple times
         segmentation = (segmentation > 0.5) * 1
         if saveMhd:
             outputValidSet[i * devBatchSize:(i + 1) * devBatchSize] = multilabel(segmentation, multilabelNum)
-        for k in range(devBatchSize):
+        for k in range(label.shape[0]):
             for j in range(multilabelNum):
                 lbl = label[k, j, :, :]
                 seg = segmentation[k, j, :, :]
@@ -358,25 +381,25 @@ for epoch in range(50):  # loop over the dataset multiple times
         create_csv(diceValidEpoch[k], outputPath + 'ValidDice_' + labelNames[k] + '.csv')
     create_csv(lossValuesDevSetAllEpoch, outputPath + 'ValidLossEpoch.csv')
 
-    if (epoch % plotStep_epochs) == (plotStep_epochs - 1):
+    if ((epoch % plotStep_epochs) == (plotStep_epochs - 1)) and (epoch >= skip_plot):
         # Metrics Plot
         plt.figure()
         # Show loss:
-        plt.plot(np.arange(0, epoch + 1), lossValuesTrainingSetAllEpoch, label='Training Set', color='blue')
-        plt.plot(np.arange(0, epoch + 1), lossValuesDevSetAllEpoch,
+        plt.plot(np.arange(skip_plot, epoch + 1), lossValuesTrainingSetAllEpoch[skip_plot:], label='Training Set', color='blue')
+        plt.plot(np.arange(skip_plot + 0.5, epoch + 1), lossValuesDevSetAllEpoch[skip_plot:],
                  label='Validation Set', color='red')  # Validation always shifted 0.5
         plt.title('Loss Values')
         plt.xlabel('Epochs')
         plt.ylabel('Loss')
-        if epoch == 0:
+        if epoch == skip_plot:
             plt.legend()
         plt.savefig(outputPath + 'model_training_loss.png')
         plt.close()
         for k in range(multilabelNum):
             plt.figure()
             # Show loss:
-            plt.plot(np.arange(0, epoch + 1), diceTrainingEpoch[k], label='Training Set', color='blue')
-            plt.plot(np.arange(0, epoch + 1), diceValidEpoch[k],
+            plt.plot(np.arange(skip_plot, epoch + 1), diceTrainingEpoch[k][skip_plot:], label='Training Set', color='blue')
+            plt.plot(np.arange(skip_plot + 0.5, epoch + 1), diceValidEpoch[k][skip_plot:],
                      label='Validation Set', color='red')  # Validation always shifted 0.5
             plt.title('Dice Score ' + labelNames[k])
             plt.xlabel('Epochs')
@@ -386,25 +409,26 @@ for epoch in range(50):  # loop over the dataset multiple times
             plt.savefig(outputPath + 'model_training_Dice_' + labelNames[k] + '.png')
             plt.close()
 
-    if (avg_vloss < best_vloss):
+    if (avg_vloss < best_vloss) and (epoch >= skip_model):
         best_vloss = avg_vloss
         print('[validation Epoch: %d] best_vloss: %.3f' % (epoch, best_vloss))
-        modelPath = outputPath + 'unet' + '_{}_{}_best_fit'.format(timestamp, epoch) + '.pt'
+        modelPath = outputPath + 'unet_{}_{}_best_fit'.format(timestamp, epoch) + '.pt'
         torch.save(unet.state_dict(), modelPath)
         #boxplot:
-        boxplot(diceTraining, xlabel=['LM', 'RM', 'LQ', 'RQ', 'LP', 'RP'],
-                outpath=(outputPath + 'trainingBoxplot.png'), yscale=[0, 1], title='Training Dice Scores')
-        boxplot(diceTraining, xlabel=['LM', 'RM', 'LQ', 'RQ', 'LP', 'RP'],
-                outpath=(outputPath + 'trainingBoxplot_shortScale.png'), yscale=[0.7, 1.0], title='Training Dice Scores')
-        boxplot(diceValid, xlabel=['LM', 'RM', 'LQ', 'RQ', 'LP', 'RP'],
-                outpath=(outputPath + 'validBoxplot.png'), yscale=[0, 1], title='Validation Dice Scores')
-        for k in range(multilabelNum):
-            boxplot(data=(diceTraining[k], diceValid[k]),
-                    xlabel=['Training Set', 'Valid Set'], outpath=(outputPath + labelNames[k] + '_boxplot.png'),
-                    yscale=[np.round(np.min(diceValid[k]), decimals=1)-0.1, 1.0], title=labelNames[k] + ' Dice Scores')
+        if Boxplot:
+            boxplot(diceTraining, xlabel=['LM', 'RM', 'LQ', 'RQ', 'LP', 'RP'],
+                    outpath=(outputPath + 'trainingBoxplot.png'), yscale=[0, 1], title='Training Dice Scores')
+            boxplot(diceTraining, xlabel=['LM', 'RM', 'LQ', 'RQ', 'LP', 'RP'],
+                    outpath=(outputPath + 'trainingBoxplot_shortScale.png'), yscale=[0.7, 1.0], title='Training Dice Scores')
+            boxplot(diceValid, xlabel=['LM', 'RM', 'LQ', 'RQ', 'LP', 'RP'],
+                    outpath=(outputPath + 'validBoxplot.png'), yscale=[0, 1], title='Validation Dice Scores')
+            for k in range(multilabelNum):
+                boxplot(data=(diceTraining[k], diceValid[k]),
+                        xlabel=['Training Set', 'Valid Set'], outpath=(outputPath + labelNames[k] + '_boxplot.png'),
+                        yscale=[np.round(min(diceValid[k]), decimals=1) - 0.05, 1.0], title=labelNames[k]+'Dice Scores')
         if saveMhd:
-            writeMhd(outputTrainingSet, outputPath + 'outputTrainingSet.mhd')
-            writeMhd(outputValidSet, outputPath + 'outputValidSet.mhd')
+            writeMhd(outputTrainingSet.astype(np.uint8), outputPath + 'outputTrainingSet.mhd')
+            writeMhd(outputValidSet.astype(np.uint8), outputPath + 'outputValidSet.mhd')
 
 print('Finished Training')
 torch.save(unet.state_dict(), outputPath + 'unet.pt')
