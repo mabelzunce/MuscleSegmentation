@@ -45,11 +45,12 @@ def dice2d(reference, segmented):
     if reference.shape != segmented.shape:
         print('Error: shape')
         return 0
+    reference = (reference > 0) * 1
+    segmented = (segmented > 0) * 1
     tp = reference * segmented
     if tp.max() != 0:
         score = (2 * tp.sum())/(reference.sum() + segmented.sum())
     else:
-        print('Error: 0')
         score = 0
     return score
 
@@ -66,3 +67,35 @@ def dice(reference, segmented):
     score = (2 * tp.sum())/(2 * tp.sum() + fn.sum() + fp.sum())
     return score
 
+
+def maxProb(image, numlabels):
+    outImage = np.zeros(image.shape)
+    indexImage = np.argmax(image, axis=1)
+    for k in range(numlabels):
+        outImage[:, k, :, :] = image[:, k, :, :] * (indexImage == k)
+    return outImage
+
+
+def multilabel(image, numlabels):
+    shape = image.shape
+    shape = list(shape)
+    shape.remove(numlabels)
+    outImage = np.zeros(shape)
+    for k in range(numlabels):
+        outImage = outImage + image[:, k, :, :] * (k+1)
+    return outImage
+
+
+def writeMhd(image, outpath):
+    img = sitk.GetImageFromArray(image)
+    sitk.WriteImage(img, outpath)
+
+
+def boxplot(data, xlabel, outpath, yscale, title):
+    plt.figure()
+    plt.boxplot(data, labels=xlabel)
+    plt.title(title)
+    plt.ylim(yscale)
+    plt.ylabel('Dice score')
+    plt.savefig(outpath)
+    plt.close()
