@@ -14,6 +14,7 @@ from utils import maxProb
 from utils import writeMhd
 from utils import multilabel
 from utils import boxplot
+from utils import p_weight
 import torch
 import torchvision
 import torchvision.transforms as transforms
@@ -47,8 +48,8 @@ class Augment(enumerate):
 AMP = True              # Mixed Precision for larger batches and faster training
 saveMhd = True          # Saves a mhd file for the output
 saveDataSetMhd = False   # Saves a Mhd file of the images and labels from dataset
-LoadModel = False     # Pretrained model
-AugmentedTrainingSet = Augment.A
+LoadModel = False       # Pretrained model
+AugmentedTrainingSet = Augment.NA
 Boxplot = True
 ############################ DATA PATHS ##############################################
 trainingSetPath = '..\\..\\Data\\LumbarSpine2D\\TrainingSet\\'
@@ -74,7 +75,7 @@ tagLabels = '_labels'
 # imageSize_voxels = (256,256)
 
 # Training/dev sets ratio, not using test set at the moment:
-trainingSetRelSize = 0.6
+trainingSetRelSize = 0.7
 devSetRelSize = 1-trainingSetRelSize
 
 ######################### CHECK DEVICE ######################
@@ -122,8 +123,8 @@ for filename in files:
             subjects.append(subjectName)
         datasize += 1
 
-tNum = int(np.round(numSubjects * trainingSetRelSize))
-vNum = int(np.round(numSubjects * devSetRelSize))
+tNum = int(np.floor(numSubjects * trainingSetRelSize))
+vNum = int(np.ceil(numSubjects * devSetRelSize))
 trainingSubjects = subjects[:tNum]
 validSubjects = subjects[tNum:]
 match AugmentedTrainingSet:
@@ -200,10 +201,10 @@ labelsValidSet = labelsValidSet.astype(np.float32)
 trainingSet = dict([('input', imagesTrainingSet[:, :, :, :]), ('output', labelsTrainingSet[:, :, :, :])])
 devSet = dict([('input', imagesValidSet[:, :, :, :]), ('output', labelsValidSet[:,:,:,:])])
 print('Data set size. Training set: {0}. Dev set: {1}.'.format(trainingSet['input'].shape[0], devSet['input'].shape[0]))
-labelNames = ('Left_Multifidus', 'Right_Multifidus', 'Left_Quadratus', 'Right_Quadratus', 'Left_Psoas', 'Right_Psoas' )
+labelNames = ('Background', 'Left_Multifidus', 'Right_Multifidus', 'Left_Quadratus', 'Right_Quadratus', 'Left_Psoas', 'Right_Psoas' )
 ####################### CREATE A U-NET MODEL #############################################
 # Create a UNET with one input and multiple output canal.
-unet = Unet(1, 6)
+unet = Unet(1, 7)
 
 if LoadModel:
     unet.load_state_dict(torch.load(unetFilename, map_location=device))
@@ -216,8 +217,7 @@ print('Test Unet Input/Output sizes:\n Input size: {0}.\n Output shape: {1}'.for
 #tensorGroundTruth.shape
 ##################################### U-NET TRAINING ############################################
 # Loss and optimizer
-
-criterion = nn.BCEWithLogitsLoss()
+#criterion = nn.BCEWithLogitsLoss()
 optimizer = optim.Adam(unet.parameters(), lr=0.0001)
 
 # Number of  batches:
@@ -238,9 +238,9 @@ gtDevSet = torch.from_numpy(devSet['output'])
 # Train
 best_vloss = 1000
 
-multilabelNum = 6
-skip_plot = 5           # early epoch loss values tend to hide later values
-skip_model = 10              # avoids saving dataset images for the early epochs
+multilabelNum = 7
+skip_plot = 250           # early epoch loss values tend to hide later values
+skip_model = 300             # avoids saving dataset images for the early epochs
 
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
@@ -262,7 +262,7 @@ deviter = 0
 
 torch.cuda.empty_cache()
 unet.to(device)
-for epoch in range(50):  # loop over the dataset multiple times
+for epoch in range(500):  # loop over the dataset multiple times
     epochNumbers.append(epoch)
     if saveMhd:
         outputTrainingSet = np.zeros(trainingSetShape)
@@ -282,11 +282,12 @@ for epoch in range(50):  # loop over the dataset multiple times
         gt = torch.from_numpy(trainingSet['output'][i*batchSize:(i+1)*batchSize, :, :, :]).to(device)
         gt = F.one_hot(gt.to(torch.int64))
         gt = torch.squeeze(torch.transpose(gt, 1, 4), 4)
-        gt = gt[:, 1:, :, :]
+        gt = gt[:, :, :, :]
         gt = gt.float()
         # zero the parameter gradients
         optimizer.zero_grad()
-
+        weights = (p_weight(gt.cpu().numpy(), numlabels=multilabelNum)).to(device)  # extrae la proporcion Neg/Pos
+        criterion = nn.BCEWithLogitsLoss(pos_weight=weights)
         # forward + backward + optimize
         if AMP:
             with torch.cuda.amp.autocast(enabled=True, dtype=torch.float16, cache_enabled=True):
@@ -343,8 +344,10 @@ for epoch in range(50):  # loop over the dataset multiple times
             gt = torch.from_numpy(devSet['output'][i * devBatchSize:(i + 1) * devBatchSize, :, :, :]).to(device)
             gt = F.one_hot(gt.to(torch.int64))
             gt = torch.squeeze(torch.transpose(gt, 1, 4), 4)
-            gt = gt[:, 1:, :, :]
+            gt = gt[:, :, :, :]
             gt = gt.float()
+            weights = (p_weight(gt.cpu().numpy(), numlabels=multilabelNum)).to(device)
+            criterion = nn.BCEWithLogitsLoss(pos_weight=weights)
 
             outputs = unet(inputs)
             loss = criterion(outputs, gt)
