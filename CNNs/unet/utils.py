@@ -90,7 +90,13 @@ def writeMhd(image, outpath):
     img = sitk.GetImageFromArray(image)
     sitk.WriteImage(img, outpath)
 
-
+def p_weight(batch, numlabels):
+    weights = torch.ones(batch.shape)
+    for k in range(numlabels):
+        positive = np.sum(batch[:, k, :, :])
+        negative = np.sum((batch[:, k, :, :] == 0) * 1)
+        weights[:, k, :, :] *= (negative/positive)
+    return weights
 def boxplot(data, xlabel, outpath, yscale, title):
     plt.figure()
     plt.boxplot(data, labels=xlabel)
