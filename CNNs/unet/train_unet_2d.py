@@ -59,8 +59,8 @@ tagLabels = '_labels'
 # imageSize_voxels = (256,256)
 
 # Training/dev sets ratio, not using test set at the moment:
-trainingSetRelSize = 0.6
-devSetRelSize = 1-trainingSetRelSize
+trainingSetRelSize = 0.8
+devSetRelSize = 0.2
 
 ######################### CHECK DEVICE ######################
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

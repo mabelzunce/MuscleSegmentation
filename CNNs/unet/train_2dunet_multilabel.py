@@ -44,13 +44,13 @@ class Augment(enumerate):
     NL = 1  # Non linear
     A = 2  # Augmented
 
-
+DEBUG = True
 AMP = True              # Mixed Precision for larger batches and faster training
 saveMhd = True          # Saves a mhd file for the output
 saveDataSetMhd = False   # Saves a Mhd file of the images and labels from dataset
 LoadModel = False       # Pretrained model
 AugmentedTrainingSet = Augment.NA
-Boxplot = True
+Boxplot = False
 ############################ DATA PATHS ##############################################
 trainingSetPath = '..\\..\\Data\\LumbarSpine2D\\TrainingSet\\'
 outputPath = '..\\..\\Data\\LumbarSpine2D\\model\\'
@@ -239,8 +239,8 @@ gtDevSet = torch.from_numpy(devSet['output'])
 best_vloss = 1000
 
 multilabelNum = 7
-skip_plot = 100          # early epoch loss values tend to hide later values
-skip_model = 300             # avoids saving dataset images for the early epochs
+skip_plot = 250           # early epoch loss values tend to hide later values
+skip_model = 0             # avoids saving dataset images for the early epochs
 
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
@@ -267,6 +267,9 @@ for epoch in range(500):  # loop over the dataset multiple times
     if saveMhd:
         outputTrainingSet = np.zeros(trainingSetShape)
         outputValidSet = np.zeros(validSetShape)
+        if DEBUG:
+            outputTrainingSetProbMaps = np.zeros(np.concatenate(([multilabelNum], trainingSetShape)))
+            outputValidSetProbMaps = np.zeros(np.concatenate(([multilabelNum], validSetShape)))
 
     lossValuesTrainingSetEpoch = []
     lossValuesDevSetEpoch = []
@@ -286,13 +289,18 @@ for epoch in range(500):  # loop over the dataset multiple times
         gt = gt.float()
         # zero the parameter gradients
         optimizer.zero_grad()
-        weights = (p_weight(gt.cpu().numpy(), numlabels=multilabelNum)).to(device)  # extrae la proporcion Neg/Pos
-        criterion = nn.BCEWithLogitsLoss(pos_weight=weights)
+        #weights = (p_weight(gt.cpu().numpy(), numlabels=multilabelNum)).to(device)  # extrae la proporcion Neg/Pos
+        weights = torch.tensor([0.001, 1, 1, 1, 1, 1, 1])
+        pos_weights = weights.resize(1, 7, 1, 1).to(device)
+        criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights)
+        criterion2 = nn.BCEWithLogitsLoss(reduction = 'none')
         # forward + backward + optimize
         if AMP:
             with torch.cuda.amp.autocast(enabled=True, dtype=torch.float16, cache_enabled=True):
                 outputs = unet(inputs)
                 loss = criterion(outputs, gt)
+                loss2 = criterion2(outputs, gt)
+                final_loss2 = (loss2 * pos_weights).mean()
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
@@ -318,12 +326,17 @@ for epoch in range(500):  # loop over the dataset multiple times
         segmentation = (segmentation > 0.5) * 1
         if saveMhd:
             outputTrainingSet[i*batchSize:(i+1)*batchSize] = multilabel(segmentation, multilabelNum)
+            if DEBUG:
+                outputsNumpy = outputs.cpu().to(torch.float32).detach().numpy()
+                outputTrainingSetProbMaps[:, i * batchSize:(i + 1) * batchSize,:,:] = outputsNumpy.transpose((1,0,2,3))
+
         for k in range(label.shape[0]):
             for j in range(multilabelNum):
                 lbl = label[k, j, :, :]
                 seg = segmentation[k, j, :, :]
                 diceScore = dice2d(lbl, seg)
                 diceTraining[j].append(diceScore)
+
     for j in range(multilabelNum):
         diceTrainingEpoch[j].append(np.mean(diceTraining[j]))
         print('Training Dice Score: %f ' % np.mean(diceTraining[j]))
@@ -366,6 +379,11 @@ for epoch in range(500):  # loop over the dataset multiple times
         segmentation = (segmentation > 0.5) * 1
         if saveMhd:
             outputValidSet[i * devBatchSize:(i + 1) * devBatchSize] = multilabel(segmentation, multilabelNum)
+            if DEBUG:
+                outputsNumpy = outputs.cpu().to(torch.float32).detach().numpy()
+                outputValidSetProbMaps[:, i * batchSize:(i + 1) * batchSize, :, :] = outputsNumpy.transpose(
+                    (1, 0, 2, 3))
+
         for k in range(label.shape[0]):
             for j in range(multilabelNum):
                 lbl = label[k, j, :, :]
@@ -419,19 +437,25 @@ for epoch in range(500):  # loop over the dataset multiple times
         torch.save(unet.state_dict(), modelPath)
         #boxplot:
         if Boxplot:
-            boxplot(diceTraining, xlabel=['BG', 'LM', 'RM', 'LQ', 'RQ', 'LP', 'RP'],
+            boxplot(diceTraining, xlabel=['LM', 'RM', 'LQ', 'RQ', 'LP', 'RP'],
                     outpath=(outputPath + 'trainingBoxplot.png'), yscale=[0, 1], title='Training Dice Scores')
-            boxplot(diceTraining, xlabel=['BG', 'LM', 'RM', 'LQ', 'RQ', 'LP', 'RP'],
+            boxplot(diceTraining, xlabel=['LM', 'RM', 'LQ', 'RQ', 'LP', 'RP'],
                     outpath=(outputPath + 'trainingBoxplot_shortScale.png'), yscale=[0.7, 1.0], title='Training Dice Scores')
-            boxplot(diceValid, xlabel=['BG', 'LM', 'RM', 'LQ', 'RQ', 'LP', 'RP'],
+            boxplot(diceValid, xlabel=['LM', 'RM', 'LQ', 'RQ', 'LP', 'RP'],
                     outpath=(outputPath + 'validBoxplot.png'), yscale=[0, 1], title='Validation Dice Scores')
             for k in range(multilabelNum):
                 boxplot(data=(diceTraining[k], diceValid[k]),
                         xlabel=['Training Set', 'Valid Set'], outpath=(outputPath + labelNames[k] + '_boxplot.png'),
                         yscale=[np.round(min(diceValid[k]), decimals=1) - 0.05, 1.0], title=labelNames[k]+'Dice Scores')
         if saveMhd:
-            writeMhd(outputTrainingSet.astype(np.uint8), outputPath + 'outputTrainingSet.mhd')
-            writeMhd(outputValidSet.astype(np.uint8), outputPath + 'outputValidSet.mhd')
+            writeMhd(outputTrainingSet.astype(np.uint8), outputPath + 'outputTrainingSet_epoch{0}.mhd'.format(epoch))
+            writeMhd(outputValidSet.astype(np.uint8), outputPath + 'outputValidSet_epoch{0}.mhd'.format(epoch))
+            if DEBUG:
+                for j in range(0, multilabelNum):
+                    writeMhd(outputTrainingSetProbMaps[j, :, :, :].squeeze(),
+                             outputPath + 'outputTrainingSetProbMaps_label{0}_epoch{1}.mhd'.format(j, epoch))
+                    writeMhd(outputValidSetProbMaps[j, :, :, :].squeeze(),
+                             outputPath + 'outputValidSetProbMaps_label{0}_epoch{1}.mhd'.format(j, epoch))
 
 print('Finished Training')
 torch.save(unet.state_dict(), outputPath + 'unet.pt')
