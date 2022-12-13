@@ -82,13 +82,14 @@ def multilabel(image, numlabels):
     shape.remove(numlabels)
     outImage = np.zeros(shape)
     for k in range(numlabels):
-        outImage = outImage + image[:, k, :, :] * (k+1)
+        outImage = outImage + image[:, k, :, :] * k
     return outImage
 
 
 def writeMhd(image, outpath):
     img = sitk.GetImageFromArray(image)
     sitk.WriteImage(img, outpath)
+
 
 def p_weight(batch, numlabels):
     weights = torch.ones(batch.shape)
@@ -97,6 +98,8 @@ def p_weight(batch, numlabels):
         negative = np.sum((batch[:, k, :, :] == 0) * 1)
         weights[:, k, :, :] *= (negative/positive)
     return weights
+
+
 def boxplot(data, xlabel, outpath, yscale, title):
     plt.figure()
     plt.boxplot(data, labels=xlabel)

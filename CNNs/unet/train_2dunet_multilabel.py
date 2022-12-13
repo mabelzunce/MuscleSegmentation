@@ -239,7 +239,7 @@ gtDevSet = torch.from_numpy(devSet['output'])
 best_vloss = 1000
 
 multilabelNum = 7
-skip_plot = 250           # early epoch loss values tend to hide later values
+skip_plot = 100          # early epoch loss values tend to hide later values
 skip_model = 300             # avoids saving dataset images for the early epochs
 
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -419,11 +419,11 @@ for epoch in range(500):  # loop over the dataset multiple times
         torch.save(unet.state_dict(), modelPath)
         #boxplot:
         if Boxplot:
-            boxplot(diceTraining, xlabel=['LM', 'RM', 'LQ', 'RQ', 'LP', 'RP'],
+            boxplot(diceTraining, xlabel=['BG', 'LM', 'RM', 'LQ', 'RQ', 'LP', 'RP'],
                     outpath=(outputPath + 'trainingBoxplot.png'), yscale=[0, 1], title='Training Dice Scores')
-            boxplot(diceTraining, xlabel=['LM', 'RM', 'LQ', 'RQ', 'LP', 'RP'],
+            boxplot(diceTraining, xlabel=['BG', 'LM', 'RM', 'LQ', 'RQ', 'LP', 'RP'],
                     outpath=(outputPath + 'trainingBoxplot_shortScale.png'), yscale=[0.7, 1.0], title='Training Dice Scores')
-            boxplot(diceValid, xlabel=['LM', 'RM', 'LQ', 'RQ', 'LP', 'RP'],
+            boxplot(diceValid, xlabel=['BG', 'LM', 'RM', 'LQ', 'RQ', 'LP', 'RP'],
                     outpath=(outputPath + 'validBoxplot.png'), yscale=[0, 1], title='Validation Dice Scores')
             for k in range(multilabelNum):
                 boxplot(data=(diceTraining[k], diceValid[k]),
