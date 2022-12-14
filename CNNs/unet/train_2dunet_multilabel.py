@@ -44,12 +44,12 @@ class Augment(enumerate):
     NL = 1  # Non linear
     A = 2  # Augmented
 
-DEBUG = True
+DEBUG = False
 AMP = True              # Mixed Precision for larger batches and faster training
 saveMhd = True          # Saves a mhd file for the output
-saveDataSetMhd = False   # Saves a Mhd file of the images and labels from dataset
-LoadModel = False       # Pretrained model
-AugmentedTrainingSet = Augment.NA
+saveDataSetMhd = True   # Saves a Mhd file of the images and labels from dataset
+LoadModel = False        # Pretrained model
+AugmentedTrainingSet = Augment.A
 Boxplot = False
 ############################ DATA PATHS ##############################################
 trainingSetPath = '..\\..\\Data\\LumbarSpine2D\\TrainingSet\\'
@@ -442,7 +442,7 @@ for epoch in range(500):  # loop over the dataset multiple times
             boxplot(diceTraining, xlabel=['LM', 'RM', 'LQ', 'RQ', 'LP', 'RP'],
                     outpath=(outputPath + 'trainingBoxplot_shortScale.png'), yscale=[0.7, 1.0], title='Training Dice Scores')
             boxplot(diceValid, xlabel=['LM', 'RM', 'LQ', 'RQ', 'LP', 'RP'],
-                    outpath=(outputPath + 'validBoxplot.png'), yscale=[0, 1], title='Validation Dice Scores')
+                    outpath=(outputPath + 'validBoxplot.png'), yscale=[np.round(min(diceValid), decimals=1) - 0.05, 1], title='Validation Dice Scores')
             for k in range(multilabelNum):
                 boxplot(data=(diceTraining[k], diceValid[k]),
                         xlabel=['Training Set', 'Valid Set'], outpath=(outputPath + labelNames[k] + '_boxplot.png'),

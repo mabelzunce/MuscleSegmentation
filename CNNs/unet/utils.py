@@ -92,12 +92,12 @@ def writeMhd(image, outpath):
 
 
 def p_weight(batch, numlabels):
-    weights = torch.ones(batch.shape)
+    weights = torch.ones(numlabels)
     for k in range(numlabels):
         positive = np.sum(batch[:, k, :, :])
         negative = np.sum((batch[:, k, :, :] == 0) * 1)
-        weights[:, k, :, :] *= (negative/positive)
-    return weights
+        weights[k] *= (negative/positive)
+    return weights.resize(1, 7, 1, 1)
 
 
 def boxplot(data, xlabel, outpath, yscale, title):
