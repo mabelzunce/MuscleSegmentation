@@ -20,10 +20,17 @@ from DynamicLabelFusionWithSimilarityWeights import DynamicLabelFusionWithSimila
 # Optional parameters:
 #   - numSelectedAtlases: number of selected atlas after majority voting.
 #   - segmentationType: segmentation type that mainly defines the similarity metric NCC and MRI
-def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath, debug, numSelectedAtlases = 5,
-                           paramFileBspline = 'NCC_2000_2048', maskedRegistration = True,
-                           suffixIntensityImage = '', suffixLabelsImage = '_labels',nameAtlasesToExcludeFromLibrary = []):
+def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath, numLabels = 11, numSelectedAtlases = 5,
+                            parameterFilesPath = 'D:\\Martin\\Segmentation\\Registration\\Elastix\\ParametersFile\\',
+                            paramFileRigid = 'Parameters_Rigid_NCC', paramFileAffine = 'Parameters_Affine_NCC',
+                           paramFileBspline = 'NCC_2000_2048', maskedRegistration = False,
+                           suffixIntensityImage = '', suffixLabelsImage = '_labels',
+                           nameAtlasesToExcludeFromLibrary = [], debug=0):
     ############################### CONFIGURATION #####################################
+    # Parameter files:
+    #parameterFilesPath = 'D:\\Martin\\Segmentation\\Registration\\Elastix\\ParametersFile\\'
+    #paramFileRigid = 'Parameters_Rigid_NCC'
+    #paramFileAffine = 'Parameters_Affine_NCC'
     # Temp path:
     tempPath = outputPath + 'temp' + '\\'
     if not os.path.exists(outputPath):
@@ -37,18 +44,13 @@ def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath,
     ###################################################################################
 
     ############################## MULTI-ATLAS SEGMENTATION PARAMETERS ######################
-    # Parameter files:
-    parameterFilesPath = 'D:\\Martin\\Segmentation\\Registration\\Elastix\\ParametersFile\\'
-    paramFileRigid = 'Parameters_Rigid_NCC'
-    paramFileAffine = 'Parameters_Affine_NCC'
+
     # Log registration parameters:
     log.write("Registration parameter files: {0}, {1}\n".format(paramFileRigid, paramFileBspline))
     #paramFilesToTest = {'Parameters_BSpline_NCC','Parameters_BSpline_NCC_1000iters', 'Parameters_BSpline_NCC_4096samples', 'Parameters_BSpline_NCC_1000iters_4096samples'}
 
     # Exponential gain to enhance smaller differences:
     expWeight = 2
-    # Labels:
-    numLabels = 11 # 10 for muscles and bone, and 11 for undecided
     ##########################################################################################
 
     ########## MASK FOR REGISTRATION ################
@@ -74,7 +76,8 @@ def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath,
         name, extension = os.path.splitext(filename)
     #    # Use only the marathon study
     #    if str(name).startswith("ID"):
-        if str(extension).endswith(extensionImages) and not str(name).endswith(suffixLabelsImage):
+        if str(extension).endswith(extensionImages) and str(name).endswith(suffixLabelsImage):
+            name = name[:-len(suffixLabelsImage)]
             if str(name).endswith(suffixIntensityImage) and (len(suffixIntensityImage) > 0):
                 name = name[:-len(suffixIntensityImage)]
             # Check if this atlas it's in the exclude list:
@@ -99,6 +102,15 @@ def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath,
         filenameAtlas = atlasImagesNames[i]
         movingImage = sitk.ReadImage(libraryPath + filenameAtlas)
         nameMoving, extension = os.path.splitext(filenameAtlas)
+        # If target 2d, but moving 3d, convert it:
+        if (targetImage.GetDimension() == 2) and (movingImage.GetDimension() == 3):
+            if movingImage.GetSize()[2] == 1:
+                movingImage = movingImage[:,:,0]
+            else:
+                log.write("Error: target image is 2D but library is 3D.")
+                print("Error: target image is 2D but library is 3D.")
+                exit(-1)
+
         # elastixImageFilter filter
         elastixImageFilter = sitk.ElastixImageFilter()
         # Parameter maps:
@@ -139,6 +151,9 @@ def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath,
         # Compute normalized cross correlation:
         imRegMethod = sitk.ImageRegistrationMethod()
         imRegMethod.SetMetricAsCorrelation()
+        # If a 2d image:
+        if targetImage.GetDimension() == 2:
+            imRegMethod.SetInitialTransform(sitk.Euler2DTransform() )
         if maskedRegistration:
             imRegMethod.SetMetricFixedMask(maskTarget)
             #imRegMethod.SetMetricMovingMask(maskMoving)
@@ -178,6 +193,14 @@ def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath,
         filenameAtlas = atlasLabelsNames[i]
         labelsImage = sitk.ReadImage(libraryPath + filenameAtlas)
         nameMoving, extension = os.path.splitext(filenameAtlas)
+        # If target 2d, but moving 3d, convert it:
+        if (targetImage.GetDimension() == 2) and (labelsImage.GetDimension() == 3):
+            if labelsImage.GetSize()[2] == 1:
+                labelsImage = labelsImage[:, :, 0]
+            else:
+                log.write("Error: target image is 2D but library is 3D.")
+                print("Error: target image is 2D but library is 3D.")
+                exit(-1)
         # Apply its transform:
         transformixImageFilter = sitk.TransformixImageFilter()
         transformixImageFilter.LogToConsoleOff()
@@ -199,8 +222,14 @@ def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath,
     for i in range(0, len(indicesSelected)):
         selectedLabels.append(propagatedLabels[indicesSelected[i]])
     outputLabels = sitk.LabelVoting(selectedLabels, numLabels) # Majority Voting only with the selected atlases.
-    # After label voting I will have undecided voxels, add an undecided solving step:
-    outputLabels = MV.SetUndecidedVoxelsUsingDistances(outputLabels, numLabels)
+    # After label voting I will have undecided voxels, add an undecided solving step.
+    # This function works only for 3D images:
+    if outputLabels.GetDimension() == 2:
+        outputLabels = sitk.JoinSeries(outputLabels)
+        outputLabels = MV.SetUndecidedVoxelsUsingDistances(outputLabels, numLabels)
+        outputLabels = outputLabels[:,:,0]
+    else:
+        outputLabels = MV.SetUndecidedVoxelsUsingDistances(outputLabels, numLabels)
     # STAPLES
     multilabelStaple = sitk.MultiLabelSTAPLEImageFilter()
     multilabelStaple.SetTerminationUpdateThreshold(1e-4)
@@ -210,10 +239,16 @@ def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath,
     # Global weighting labelling:
     registeredAtlases = {'image': registeredImages, 'labels': propagatedLabels} # All labels here as the selection is done in the function.
     numLabelWithoutUndecided = numLabels - 1
+    # This function works only for 3D images:
+    if outputLabels.GetDimension() == 2:
+        outputLabelsGWV = GlobalWeightingLabelling(targetImage, registeredAtlases, numLabelWithoutUndecided,
+                                           numSelectedAtlases=numSelectedAtlases,
+                                           expWeight=expWeight, useOnlyLabelVoxels=True, outputPath=tempPath,
+                                           debug=0)
     outputLabelsGWV = GlobalWeightingLabelling(targetImage, registeredAtlases, numLabelWithoutUndecided,
-                                       numSelectedAtlases=numSelectedAtlases,
-                                       expWeight=expWeight, useOnlyLabelVoxels=True, outputPath=tempPath,
-                                       debug=0)
+                                               numSelectedAtlases=numSelectedAtlases,
+                                               expWeight=expWeight, useOnlyLabelVoxels=True, outputPath=tempPath,
+                                               debug=0)
     # Local weighted voting:
     outputLabelsLWV = LocalWeightingLabelling(targetImage, registeredAtlases, numLabelWithoutUndecided,
                                             numSelectedAtlases=numSelectedAtlases,
