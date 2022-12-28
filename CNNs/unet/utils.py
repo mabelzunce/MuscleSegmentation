@@ -76,13 +76,16 @@ def maxProb(image, numlabels):
     return outImage
 
 
-def multilabel(image, numlabels):
+def multilabel(image, numlabels, Background):
     shape = image.shape
     shape = list(shape)
     shape.remove(numlabels)
     outImage = np.zeros(shape)
     for k in range(numlabels):
-        outImage = outImage + image[:, k, :, :] * k
+        if Background:
+            outImage = outImage + image[:, k, :, :] * k
+        else:
+            outImage = outImage + image[:, k, :, :] * (k + 1)
     return outImage
 
 
@@ -91,13 +94,22 @@ def writeMhd(image, outpath):
     sitk.WriteImage(img, outpath)
 
 
-def p_weight(batch, numlabels):
-    weights = torch.ones(numlabels)
+def pn_weights(trainingset, numlabels):         # positive to negative ratio
+    weights = np.zeros(numlabels)
     for k in range(numlabels):
-        positive = np.sum(batch[:, k, :, :])
-        negative = np.sum((batch[:, k, :, :] == 0) * 1)
-        weights[k] *= (negative/positive)
-    return weights.resize(1, 7, 1, 1)
+        weights[k] = (trainingset.size - np.sum(trainingset == k))/np.sum(trainingset == k)
+    weights = weights/np.sum(weights)
+    weights.resize((1, weights.size, 1, 1))
+    return torch.tensor(weights)
+
+
+def rel_weights(trainingset, numlabels):        #positive to size ratio
+    weights = np.zeros(numlabels)
+    for k in range(numlabels):
+        weights[k] = trainingset.size/np.sum(trainingset == k)
+    weights = weights / np.sum(weights)
+    weights.resize((1, weights.size, 1, 1))
+    return torch.tensor(weights)
 
 
 def boxplot(data, xlabel, outpath, yscale, title):

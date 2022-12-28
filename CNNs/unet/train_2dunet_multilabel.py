@@ -14,7 +14,8 @@ from utils import maxProb
 from utils import writeMhd
 from utils import multilabel
 from utils import boxplot
-from utils import p_weight
+from utils import pn_weights
+from utils import rel_weights
 import torch
 import torchvision
 import torchvision.transforms as transforms
@@ -42,15 +43,18 @@ from torchvision.utils import make_grid
 class Augment(enumerate):
     NA = 0  # No Augment
     NL = 1  # Non linear
-    A = 2  # Augmented
+    L = 2  # Linear
+    A = 3   #Augmented
+
 
 DEBUG = False
 AMP = True              # Mixed Precision for larger batches and faster training
-saveMhd = True          # Saves a mhd file for the output
-saveDataSetMhd = True   # Saves a Mhd file of the images and labels from dataset
+saveMhd = True         # Saves a mhd file for the output
+saveDataSetMhd = True  # Saves a Mhd file of the images and labels from dataset
 LoadModel = False        # Pretrained model
-AugmentedTrainingSet = Augment.A
-Boxplot = False
+Background = True        # Background is considered as label
+Boxplot = True           # Boxplot created in every best fit
+AugmentedTrainingSet = Augment.NL
 ############################ DATA PATHS ##############################################
 trainingSetPath = '..\\..\\Data\\LumbarSpine2D\\TrainingSet\\'
 outputPath = '..\\..\\Data\\LumbarSpine2D\\model\\'
@@ -131,6 +135,8 @@ match AugmentedTrainingSet:
     case 1:
         tNum = (tNum * tNum)
     case 2:
+        tNum = (numRot * tNum)
+    case 3:
         tNum = (tNum + numRot) * tNum
 
 k = 0
@@ -144,6 +150,9 @@ for i in range(0, datasize):
         case 1:
             condition1 = (trainingSubjects.__contains__(name1)) and (trainingSubjects.__contains__(name2))
         case 2:
+            conditionAux = trainingSubjects.__contains__(name2) or validSubjects.__contains__(name2)
+            condition1 = ((trainingSubjects.__contains__(name1)) and not conditionAux)
+        case 3:
             condition1 = (trainingSubjects.__contains__(name1)) and (not (validSubjects.__contains__(name2)))
 
     condition2 = (validSubjects.__contains__(name1)) and (name2 == name1)
@@ -204,7 +213,19 @@ print('Data set size. Training set: {0}. Dev set: {1}.'.format(trainingSet['inpu
 labelNames = ('Background', 'Left_Multifidus', 'Right_Multifidus', 'Left_Quadratus', 'Right_Quadratus', 'Left_Psoas', 'Right_Psoas' )
 ####################### CREATE A U-NET MODEL #############################################
 # Create a UNET with one input and multiple output canal.
-unet = Unet(1, 7)
+multilabelNum = 6
+if Background:
+    multilabelNum += 1
+    xLabel = ['BG', 'LM', 'RM', 'LQ', 'RQ', 'LP', 'RP']
+    pos_weights = pn_weights(labelsTrainingSet, multilabelNum)
+    pos_weights = pos_weights.to(device)
+    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights)
+else:
+    xLabel = ['LM', 'RM', 'LQ', 'RQ', 'LP', 'RP']
+    criterion = nn.BCEWithLogitsLoss()
+
+unet = Unet(1, multilabelNum)
+optimizer = optim.Adam(unet.parameters(), lr=0.0001)
 
 if LoadModel:
     unet.load_state_dict(torch.load(unetFilename, map_location=device))
@@ -216,10 +237,6 @@ out = unet(inp)
 print('Test Unet Input/Output sizes:\n Input size: {0}.\n Output shape: {1}'.format(inp.shape, out.shape))
 #tensorGroundTruth.shape
 ##################################### U-NET TRAINING ############################################
-# Loss and optimizer
-#criterion = nn.BCEWithLogitsLoss()
-optimizer = optim.Adam(unet.parameters(), lr=0.0001)
-
 # Number of  batches:
 batchSize = 3
 devBatchSize = 3
@@ -238,9 +255,8 @@ gtDevSet = torch.from_numpy(devSet['output'])
 # Train
 best_vloss = 1000
 
-multilabelNum = 7
-skip_plot = 250           # early epoch loss values tend to hide later values
-skip_model = 0             # avoids saving dataset images for the early epochs
+skip_plot = 5          # early epoch loss values tend to hide later values
+skip_model = 10            # avoids saving dataset images for the early epochs
 
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
@@ -285,22 +301,15 @@ for epoch in range(500):  # loop over the dataset multiple times
         gt = torch.from_numpy(trainingSet['output'][i*batchSize:(i+1)*batchSize, :, :, :]).to(device)
         gt = F.one_hot(gt.to(torch.int64))
         gt = torch.squeeze(torch.transpose(gt, 1, 4), 4)
-        gt = gt[:, :, :, :]
         gt = gt.float()
+        if not Background:
+            gt = gt[:, 1:, :, :]
         # zero the parameter gradients
         optimizer.zero_grad()
-        #weights = (p_weight(gt.cpu().numpy(), numlabels=multilabelNum)).to(device)  # extrae la proporcion Neg/Pos
-        weights = torch.tensor([0.001, 1, 1, 1, 1, 1, 1])
-        pos_weights = weights.resize(1, 7, 1, 1).to(device)
-        criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights)
-        criterion2 = nn.BCEWithLogitsLoss(reduction = 'none')
-        # forward + backward + optimize
         if AMP:
             with torch.cuda.amp.autocast(enabled=True, dtype=torch.float16, cache_enabled=True):
                 outputs = unet(inputs)
                 loss = criterion(outputs, gt)
-                loss2 = criterion2(outputs, gt)
-                final_loss2 = (loss2 * pos_weights).mean()
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
@@ -325,7 +334,7 @@ for epoch in range(500):  # loop over the dataset multiple times
         segmentation = maxProb(segmentation.detach().numpy(), multilabelNum)
         segmentation = (segmentation > 0.5) * 1
         if saveMhd:
-            outputTrainingSet[i*batchSize:(i+1)*batchSize] = multilabel(segmentation, multilabelNum)
+            outputTrainingSet[i*batchSize:(i+1)*batchSize] = multilabel(segmentation, multilabelNum, Background)
             if DEBUG:
                 outputsNumpy = outputs.cpu().to(torch.float32).detach().numpy()
                 outputTrainingSetProbMaps[:, i * batchSize:(i + 1) * batchSize,:,:] = outputsNumpy.transpose((1,0,2,3))
@@ -357,10 +366,9 @@ for epoch in range(500):  # loop over the dataset multiple times
             gt = torch.from_numpy(devSet['output'][i * devBatchSize:(i + 1) * devBatchSize, :, :, :]).to(device)
             gt = F.one_hot(gt.to(torch.int64))
             gt = torch.squeeze(torch.transpose(gt, 1, 4), 4)
-            gt = gt[:, :, :, :]
             gt = gt.float()
-            weights = (p_weight(gt.cpu().numpy(), numlabels=multilabelNum)).to(device)
-            criterion = nn.BCEWithLogitsLoss(pos_weight=weights)
+            if not Background:
+                gt = gt[:, 1:, :, :]
 
             outputs = unet(inputs)
             loss = criterion(outputs, gt)
@@ -378,7 +386,7 @@ for epoch in range(500):  # loop over the dataset multiple times
         segmentation = maxProb(segmentation.detach().numpy(), multilabelNum)
         segmentation = (segmentation > 0.5) * 1
         if saveMhd:
-            outputValidSet[i * devBatchSize:(i + 1) * devBatchSize] = multilabel(segmentation, multilabelNum)
+            outputValidSet[i * devBatchSize:(i + 1) * devBatchSize] = multilabel(segmentation, multilabelNum, Background)
             if DEBUG:
                 outputsNumpy = outputs.cpu().to(torch.float32).detach().numpy()
                 outputValidSetProbMaps[:, i * batchSize:(i + 1) * batchSize, :, :] = outputsNumpy.transpose(
@@ -425,7 +433,7 @@ for epoch in range(500):  # loop over the dataset multiple times
             plt.title('Dice Score ' + labelNames[k])
             plt.xlabel('Epochs')
             plt.ylabel('Dice')
-            if epoch == 0:
+            if epoch == skip_plot:
                 plt.legend()
             plt.savefig(outputPath + 'model_training_Dice_' + labelNames[k] + '.png')
             plt.close()
@@ -437,19 +445,19 @@ for epoch in range(500):  # loop over the dataset multiple times
         torch.save(unet.state_dict(), modelPath)
         #boxplot:
         if Boxplot:
-            boxplot(diceTraining, xlabel=['LM', 'RM', 'LQ', 'RQ', 'LP', 'RP'],
+            boxplot(diceTraining, xlabel=xLabel,
                     outpath=(outputPath + 'trainingBoxplot.png'), yscale=[0, 1], title='Training Dice Scores')
-            boxplot(diceTraining, xlabel=['LM', 'RM', 'LQ', 'RQ', 'LP', 'RP'],
+            boxplot(diceTraining, xlabel=xLabel,
                     outpath=(outputPath + 'trainingBoxplot_shortScale.png'), yscale=[0.7, 1.0], title='Training Dice Scores')
-            boxplot(diceValid, xlabel=['LM', 'RM', 'LQ', 'RQ', 'LP', 'RP'],
-                    outpath=(outputPath + 'validBoxplot.png'), yscale=[np.round(min(diceValid), decimals=1) - 0.05, 1], title='Validation Dice Scores')
+            boxplot(diceValid, xlabel=xLabel,
+                    outpath=(outputPath + 'validBoxplot.png'), yscale=[0, 1], title='Validation Dice Scores')
             for k in range(multilabelNum):
                 boxplot(data=(diceTraining[k], diceValid[k]),
                         xlabel=['Training Set', 'Valid Set'], outpath=(outputPath + labelNames[k] + '_boxplot.png'),
                         yscale=[np.round(min(diceValid[k]), decimals=1) - 0.05, 1.0], title=labelNames[k]+'Dice Scores')
         if saveMhd:
-            writeMhd(outputTrainingSet.astype(np.uint8), outputPath + 'outputTrainingSet_epoch{0}.mhd'.format(epoch))
-            writeMhd(outputValidSet.astype(np.uint8), outputPath + 'outputValidSet_epoch{0}.mhd'.format(epoch))
+            writeMhd(outputTrainingSet.astype(np.uint8), outputPath + 'outputTrainingSet.mhd')
+            writeMhd(outputValidSet.astype(np.uint8), outputPath + 'outputValidSet.mhd')
             if DEBUG:
                 for j in range(0, multilabelNum):
                     writeMhd(outputTrainingSetProbMaps[j, :, :, :].squeeze(),
