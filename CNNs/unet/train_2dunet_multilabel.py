@@ -14,6 +14,7 @@ from utils import maxProb
 from utils import writeMhd
 from utils import multilabel
 from utils import boxplot
+from utils import DiceLoss
 from utils import pn_weights
 from utils import rel_weights
 import torch
@@ -48,13 +49,14 @@ class Augment(enumerate):
 
 
 DEBUG = False
+Test = False            # only runs one validation cycle
 AMP = True              # Mixed Precision for larger batches and faster training
 saveMhd = True         # Saves a mhd file for the output
-saveDataSetMhd = True  # Saves a Mhd file of the images and labels from dataset
+saveDataSetMhd = False  # Saves a Mhd file of the images and labels from dataset
 LoadModel = False        # Pretrained model
 Background = True        # Background is considered as label
 Boxplot = True           # Boxplot created in every best fit
-AugmentedTrainingSet = Augment.NL
+AugmentedTrainingSet = Augment.L
 ############################ DATA PATHS ##############################################
 trainingSetPath = '..\\..\\Data\\LumbarSpine2D\\TrainingSet\\'
 outputPath = '..\\..\\Data\\LumbarSpine2D\\model\\'
@@ -255,8 +257,8 @@ gtDevSet = torch.from_numpy(devSet['output'])
 # Train
 best_vloss = 1000
 
-skip_plot = 5          # early epoch loss values tend to hide later values
-skip_model = 10            # avoids saving dataset images for the early epochs
+skip_plot = 20         # early epoch loss values tend to hide later values
+skip_model = 30            # avoids saving dataset images for the early epochs
 
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
@@ -276,9 +278,13 @@ diceValidEpoch = [[] for n in range(multilabelNum)]
 iter = 0
 deviter = 0
 
+E = 500
+if Test:
+    E = 1
+
 torch.cuda.empty_cache()
 unet.to(device)
-for epoch in range(500):  # loop over the dataset multiple times
+for epoch in range(E):  # loop over the dataset multiple times
     epochNumbers.append(epoch)
     if saveMhd:
         outputTrainingSet = np.zeros(trainingSetShape)
@@ -293,70 +299,71 @@ for epoch in range(500):  # loop over the dataset multiple times
     diceTraining = [[] for n in range(multilabelNum)]
     diceValid = [[] for n in range(multilabelNum)]
 
-    scaler = torch.cuda.amp.GradScaler()
-    unet.train(True)
-    for i in range(numBatches):
-        # get the inputs
-        inputs = torch.from_numpy(trainingSet['input'][i*batchSize:(i+1)*batchSize, :, :, :]).to(device)
-        gt = torch.from_numpy(trainingSet['output'][i*batchSize:(i+1)*batchSize, :, :, :]).to(device)
-        gt = F.one_hot(gt.to(torch.int64))
-        gt = torch.squeeze(torch.transpose(gt, 1, 4), 4)
-        gt = gt.float()
-        if not Background:
-            gt = gt[:, 1:, :, :]
-        # zero the parameter gradients
-        optimizer.zero_grad()
-        if AMP:
-            with torch.cuda.amp.autocast(enabled=True, dtype=torch.float16, cache_enabled=True):
+    if not Test:
+        scaler = torch.cuda.amp.GradScaler()
+        unet.train(True)
+        for i in range(numBatches):
+            # get the inputs
+            inputs = torch.from_numpy(trainingSet['input'][i*batchSize:(i+1)*batchSize, :, :, :]).to(device)
+            gt = torch.from_numpy(trainingSet['output'][i*batchSize:(i+1)*batchSize, :, :, :]).to(device)
+            gt = F.one_hot(gt.to(torch.int64))
+            gt = torch.squeeze(torch.transpose(gt, 1, 4), 4)
+            gt = gt.float()
+            if not Background:
+                gt = gt[:, 1:, :, :]
+            # zero the parameter gradients
+            optimizer.zero_grad()
+            if AMP:
+                with torch.cuda.amp.autocast(enabled=True, dtype=torch.float16, cache_enabled=True):
+                    outputs = unet(inputs)
+                    loss = criterion(outputs, gt)
+                scaler.scale(loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
+            else:
                 outputs = unet(inputs)
                 loss = criterion(outputs, gt)
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
-        else:
-            outputs = unet(inputs)
-            loss = criterion(outputs, gt)
-            loss.backward()
-            optimizer.step()
+                loss.backward()
+                optimizer.step()
 
-        # Save loss values:
-        lossValuesTrainingSet.append(loss.item())
-        lossValuesTrainingSetEpoch.append(loss.item())
-        iterationNumbers.append(iter)
-        #Print epoch iteration and loss value:
-        print('[%d, %5d] loss: %.3f' % (epoch, i, loss.item()))
-        # Update iteration number:
-        iter = iter + 1
-        create_csv(lossValuesTrainingSet, outputPath + 'TestLossIter.csv')
-        label = gt.cpu().numpy()
-        label = label.astype('int32')
-        segmentation = torch.sigmoid(outputs.cpu().to(torch.float32))
-        segmentation = maxProb(segmentation.detach().numpy(), multilabelNum)
-        segmentation = (segmentation > 0.5) * 1
-        if saveMhd:
-            outputTrainingSet[i*batchSize:(i+1)*batchSize] = multilabel(segmentation, multilabelNum, Background)
-            if DEBUG:
-                outputsNumpy = outputs.cpu().to(torch.float32).detach().numpy()
-                outputTrainingSetProbMaps[:, i * batchSize:(i + 1) * batchSize,:,:] = outputsNumpy.transpose((1,0,2,3))
+            # Save loss values:
+            lossValuesTrainingSet.append(loss.item())
+            lossValuesTrainingSetEpoch.append(loss.item())
+            iterationNumbers.append(iter)
+            #Print epoch iteration and loss value:
+            print('[%d, %5d] loss: %.3f' % (epoch, i, loss.item()))
+            # Update iteration number:
+            iter = iter + 1
+            create_csv(lossValuesTrainingSet, outputPath + 'TestLossIter.csv')
+            label = gt.cpu().numpy()
+            label = label.astype('int32')
+            segmentation = torch.sigmoid(outputs.cpu().to(torch.float32))
+            segmentation = maxProb(segmentation.detach().numpy(), multilabelNum)
+            segmentation = (segmentation > 0.5) * 1
+            if saveMhd:
+                outputTrainingSet[i*batchSize:(i+1)*batchSize] = multilabel(segmentation, multilabelNum, Background)
+                if DEBUG:
+                    outputsNumpy = outputs.cpu().to(torch.float32).detach().numpy()
+                    outputTrainingSetProbMaps[:, i * batchSize:(i + 1) * batchSize,:,:] = outputsNumpy.transpose((1,0,2,3))
 
-        for k in range(label.shape[0]):
-            for j in range(multilabelNum):
-                lbl = label[k, j, :, :]
-                seg = segmentation[k, j, :, :]
-                diceScore = dice2d(lbl, seg)
-                diceTraining[j].append(diceScore)
+            for k in range(label.shape[0]):
+                for j in range(multilabelNum):
+                    lbl = label[k, j, :, :]
+                    seg = segmentation[k, j, :, :]
+                    diceScore = dice2d(lbl, seg)
+                    diceTraining[j].append(diceScore)
 
-    for j in range(multilabelNum):
-        diceTrainingEpoch[j].append(np.mean(diceTraining[j]))
-        print('Training Dice Score: %f ' % np.mean(diceTraining[j]))
+        for j in range(multilabelNum):
+            diceTrainingEpoch[j].append(np.mean(diceTraining[j]))
+            print('Training Dice Score: %f ' % np.mean(diceTraining[j]))
 
-    avg_tloss = np.mean(lossValuesTrainingSetEpoch)
-    lossValuesTrainingSetAllEpoch.append(avg_tloss)
-    print('avg_tloss: %f' % avg_tloss)
+        avg_tloss = np.mean(lossValuesTrainingSetEpoch)
+        lossValuesTrainingSetAllEpoch.append(avg_tloss)
+        print('avg_tloss: %f' % avg_tloss)
 
-    for k in range(multilabelNum):
-        create_csv(diceTrainingEpoch[k], outputPath + 'TrainingDice_' + labelNames[k] + '.csv')
-    create_csv(lossValuesTrainingSetAllEpoch, outputPath + 'TestLossEpoch.csv')
+        for k in range(multilabelNum):
+            create_csv(diceTrainingEpoch[k], outputPath + 'TrainingDice_' + labelNames[k] + '.csv')
+        create_csv(lossValuesTrainingSetAllEpoch, outputPath + 'TestLossEpoch.csv')
 
     unet.train(False)
     torch.cuda.empty_cache()

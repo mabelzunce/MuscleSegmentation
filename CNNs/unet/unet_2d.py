@@ -10,9 +10,11 @@ class DoubleConv(nn.Module):
             nn.Conv2d(in_ch, out_ch, 3, padding=1),
             nn.BatchNorm2d(out_ch),
             nn.ReLU(inplace=True),
+            #nn.Dropout(),
             nn.Conv2d(out_ch, out_ch, 3, padding=1),
             nn.BatchNorm2d(out_ch),
             nn.ReLU(inplace=True))
+            #nn.Dropout())
 
     def forward(self, x):
         x = self.conv(x)
@@ -43,7 +45,7 @@ class Down(nn.Module):
 
 
 class Up(nn.Module):
-    def __init__(self, in_ch, out_ch, bilinear=True):
+    def __init__(self, in_ch, out_ch, bilinear = True):
         super(Up, self).__init__()
 
         if bilinear:
@@ -75,22 +77,23 @@ class OutConv(nn.Module):
         x = self.conv(x)
         return x
 
+
 class Unet(nn.Module):
     def __init__(self, in_channels, classes):
         super(Unet, self).__init__()
         self.n_channels = in_channels
         self.n_classes = classes
 
-        self.inc = InConv(in_channels, 64)
-        self.down1 = Down(64, 128)
-        self.down2 = Down(128, 256)
-        self.down3 = Down(256, 512)
-        self.down4 = Down(512, 512)
-        self.up1 = Up(1024, 256)
-        self.up2 = Up(512, 128)
-        self.up3 = Up(256, 64)
-        self.up4 = Up(128, 64)
-        self.outc = OutConv(64, classes)
+        self.inc = InConv(in_channels, 32)
+        self.down1 = Down(32, 64)
+        self.down2 = Down(64, 128)
+        self.down3 = Down(128, 256)
+        self.down4 = Down(256, 256)
+        self.up1 = Up(512, 128)
+        self.up2 = Up(256, 64)
+        self.up3 = Up(128, 32)
+        self.up4 = Up(64, 16)
+        self.outc = OutConv(16, classes)
 
     def forward(self, x):
         x1 = self.inc(x)
