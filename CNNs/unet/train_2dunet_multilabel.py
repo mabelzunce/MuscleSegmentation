@@ -1,10 +1,7 @@
-import nibabel as nb
 import SimpleITK as sitk
-import matplotlib
 from matplotlib import pyplot as plt
 import numpy as np
 import os
-import csv
 import math
 from datetime import datetime
 from utils import create_csv
@@ -56,7 +53,7 @@ saveDataSetMhd = False  # Saves a Mhd file of the images and labels from dataset
 LoadModel = False        # Pretrained model
 Background = True        # Background is considered as label
 Boxplot = True           # Boxplot created in every best fit
-AugmentedTrainingSet = Augment.L
+AugmentedTrainingSet = Augment.A
 ############################ DATA PATHS ##############################################
 trainingSetPath = '..\\..\\Data\\LumbarSpine2D\\TrainingSet\\'
 outputPath = '..\\..\\Data\\LumbarSpine2D\\model\\'
@@ -219,7 +216,7 @@ multilabelNum = 6
 if Background:
     multilabelNum += 1
     xLabel = ['BG', 'LM', 'RM', 'LQ', 'RQ', 'LP', 'RP']
-    pos_weights = pn_weights(labelsTrainingSet, multilabelNum)
+    pos_weights = rel_weights(labelsTrainingSet, multilabelNum)
     pos_weights = pos_weights.to(device)
     criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights)
 else:
@@ -240,8 +237,8 @@ print('Test Unet Input/Output sizes:\n Input size: {0}.\n Output shape: {1}'.for
 #tensorGroundTruth.shape
 ##################################### U-NET TRAINING ############################################
 # Number of  batches:
-batchSize = 3
-devBatchSize = 3
+batchSize = 4
+devBatchSize = 4
 numBatches = np.ceil(trainingSet['input'].shape[0]/batchSize).astype(int)
 devNumBatches = np.ceil(devSet['input'].shape[0]/devBatchSize).astype(int)
 # Show results every printStep batches:
@@ -257,8 +254,8 @@ gtDevSet = torch.from_numpy(devSet['output'])
 # Train
 best_vloss = 1000
 
-skip_plot = 20         # early epoch loss values tend to hide later values
-skip_model = 30            # avoids saving dataset images for the early epochs
+skip_plot = 25        # early epoch loss values tend to hide later values
+skip_model = 25            # avoids saving dataset images for the early epochs
 
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
