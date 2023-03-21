@@ -70,6 +70,29 @@ def dice(reference, segmented):
     return score
 
 
+def sensitivity(reference, segmented):
+    if reference.shape != segmented.shape:
+        print('Error: shape')
+        return 0
+    reference = reference > 0
+    segmented = segmented > 0
+    tp = (reference * segmented) * 1
+    fn = (~segmented * reference) * 1
+    score = tp.sum()/(tp.sum() + fn.sum())
+    return score
+
+
+def specificity(reference, segmented):
+    if reference.shape != segmented.shape:
+        print('Error: shape')
+        return 0
+    reference = reference == 0
+    segmented = segmented == 0
+    tn = (reference * segmented) * 1
+    fp = (~segmented * reference) * 1
+    score = tn.sum() / (tn.sum() + fp.sum())
+    return score
+
 def maxProb(image, numlabels):
     outImage = np.zeros(image.shape)
     indexImage = np.argmax(image, axis=1)
@@ -119,7 +142,7 @@ def boxplot(data, xlabel, outpath, yscale, title):
     plt.boxplot(data, labels=xlabel)
     plt.title(title)
     plt.ylim(yscale)
-    plt.ylabel('Dice score')
+    plt.ylabel('Score')
     plt.savefig(outpath)
     plt.close()
 
@@ -141,3 +164,4 @@ class DiceLoss(nn.Module):
         dice = (2. * intersection + smooth) / (inputs.sum() + targets.sum() + smooth)
 
         return 1 - dice
+

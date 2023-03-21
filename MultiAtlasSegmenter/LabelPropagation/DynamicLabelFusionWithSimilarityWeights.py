@@ -202,15 +202,23 @@ def DynamicLabelFusionWithSimilarityWeights(targetImage, registeredAtlases, numL
 # Receives probabilityMaps, that is a list where each element is an itk image for each label.
 # A probabilityMap for the background is expected and it should be in probabilityMaps[0].
 def GetMajorityVotingFromProbMaps(probabilityMaps, useBackgroundAsLabel = True):
-    ndaProbMaps = np.zeros((probabilityMaps[0].GetSize()[2],probabilityMaps[0].GetSize()[1],
-                            probabilityMaps[0].GetSize()[0], len(probabilityMaps)))
-    # Create a 4D array with all the probmaps.
-    for i in range(0, len(probabilityMaps)):
-        ndaProbMaps[:,:,:,i] = sitk.GetArrayFromImage(probabilityMaps[i])
+    if probabilityMaps[0].GetDimension() == 3:
+        ndaProbMaps = np.zeros((probabilityMaps[0].GetSize()[2],probabilityMaps[0].GetSize()[1],
+                                probabilityMaps[0].GetSize()[0], len(probabilityMaps)))
+        # Create a 4D array with all the probmaps.
+        for i in range(0, len(probabilityMaps)):
+            ndaProbMaps[:,:,:,i] = sitk.GetArrayFromImage(probabilityMaps[i])
 
 
-    # Get the maximum for each label:
-    labels = np.argmax(ndaProbMaps, axis = 3)
+        # Get the maximum for each label:
+        labels = np.argmax(ndaProbMaps, axis = 3)
+    elif probabilityMaps[0].GetDimension() == 2:
+        ndaProbMaps = np.zeros((probabilityMaps[0].GetSize()[1], probabilityMaps[0].GetSize()[0], len(probabilityMaps)))
+        # Create a 4D array with all the probmaps.
+        for i in range(0, len(probabilityMaps)):
+            ndaProbMaps[:,:,i] = sitk.GetArrayFromImage(probabilityMaps[i])
+        # Get the maximum for each label:
+        labels = np.argmax(ndaProbMaps, axis = 2)
     ##### THIS WAS NECESSARY WHEN A BACKGROUND LABEL WAS NOT EXPECTED ######################
     #labels = labels + 1 # Labels base index is 1
     ## Need to take into account the voxels with zeros as another label.

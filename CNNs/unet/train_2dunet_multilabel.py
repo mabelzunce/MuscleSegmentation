@@ -7,6 +7,8 @@ from datetime import datetime
 from utils import create_csv
 from utils import imshow_from_torch
 from utils import dice2d
+from utils import specificity
+from utils import sensitivity
 from utils import maxProb
 from utils import writeMhd
 from utils import multilabel
@@ -46,20 +48,20 @@ class Augment(enumerate):
 
 
 DEBUG = False
-Test = False            # only runs one validation cycle
+Test = True           # only runs one validation cycle
 AMP = True              # Mixed Precision for larger batches and faster training
 saveMhd = True         # Saves a mhd file for the output
 saveDataSetMhd = False  # Saves a Mhd file of the images and labels from dataset
-LoadModel = False        # Pretrained model
+LoadModel = True       # Pretrained model
 Background = True        # Background is considered as label
 Boxplot = True           # Boxplot created in every best fit
-AugmentedTrainingSet = Augment.A
+AugmentedTrainingSet = Augment.L
 ############################ DATA PATHS ##############################################
 trainingSetPath = '..\\..\\Data\\LumbarSpine2D\\TrainingSet\\'
 outputPath = '..\\..\\Data\\LumbarSpine2D\\model\\'
 modelLocation = '..\\..\\Data\\LumbarSpine2D\\PretrainedModel\\'
 
-if LoadModel:
+if LoadModel or Test:
     modelName = os.listdir(modelLocation)[0]
     unetFilename = modelLocation + modelName
 
@@ -209,7 +211,7 @@ labelsValidSet = labelsValidSet.astype(np.float32)
 trainingSet = dict([('input', imagesTrainingSet[:, :, :, :]), ('output', labelsTrainingSet[:, :, :, :])])
 devSet = dict([('input', imagesValidSet[:, :, :, :]), ('output', labelsValidSet[:,:,:,:])])
 print('Data set size. Training set: {0}. Dev set: {1}.'.format(trainingSet['input'].shape[0], devSet['input'].shape[0]))
-labelNames = ('Background', 'Left_Multifidus', 'Right_Multifidus', 'Left_Quadratus', 'Right_Quadratus', 'Left_Psoas', 'Right_Psoas' )
+labelNames = ('Background ', 'Left Multifidus', 'Right Multifidus ', 'Left Quadratus ', 'Right Quadratus ', 'Left Psoas ', 'Right Psoas ' )
 ####################### CREATE A U-NET MODEL #############################################
 # Create a UNET with one input and multiple output canal.
 multilabelNum = 6
@@ -252,10 +254,10 @@ if plotStep_epochs != math.inf:
 inputsDevSet = torch.from_numpy(devSet['input'])
 gtDevSet = torch.from_numpy(devSet['output'])
 # Train
-best_vloss = 1000
+best_vloss = 1
 
-skip_plot = 25        # early epoch loss values tend to hide later values
-skip_model = 25            # avoids saving dataset images for the early epochs
+skip_plot = 100        # early epoch loss values tend to hide later values
+skip_model = 100            # avoids saving dataset images for the early epochs
 
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
@@ -278,6 +280,7 @@ deviter = 0
 E = 500
 if Test:
     E = 1
+    skip_model = 0
 
 torch.cuda.empty_cache()
 unet.to(device)
@@ -297,6 +300,7 @@ for epoch in range(E):  # loop over the dataset multiple times
     diceValid = [[] for n in range(multilabelNum)]
 
     if not Test:
+        #### TRAINING ####
         scaler = torch.cuda.amp.GradScaler()
         unet.train(True)
         for i in range(numBatches):
@@ -362,6 +366,9 @@ for epoch in range(E):  # loop over the dataset multiple times
             create_csv(diceTrainingEpoch[k], outputPath + 'TrainingDice_' + labelNames[k] + '.csv')
         create_csv(lossValuesTrainingSetAllEpoch, outputPath + 'TestLossEpoch.csv')
 
+
+
+    #### VALIDATION ####
     unet.train(False)
     torch.cuda.empty_cache()
     for i in range(devNumBatches):
@@ -401,6 +408,8 @@ for epoch in range(E):  # loop over the dataset multiple times
                 lbl = label[k, j, :, :]
                 seg = segmentation[k, j, :, :]
                 diceScore = dice2d(lbl, seg)
+                specScore = specificity(lbl, seg)
+                sensScore = sensitivity(lbl, seg)
                 diceValid[j].append(diceScore)
     for j in range(multilabelNum):
         diceValidEpoch[j].append(np.mean(diceValid[j]))
@@ -458,7 +467,7 @@ for epoch in range(E):  # loop over the dataset multiple times
             for k in range(multilabelNum):
                 boxplot(data=(diceTraining[k], diceValid[k]),
                         xlabel=['Training Set', 'Valid Set'], outpath=(outputPath + labelNames[k] + '_boxplot.png'),
-                        yscale=[np.round(min(diceValid[k]), decimals=1) - 0.05, 1.0], title=labelNames[k]+'Dice Scores')
+                        yscale=[0.7, 1.0], title=labelNames[k]+'Dice Scores')
         if saveMhd:
             writeMhd(outputTrainingSet.astype(np.uint8), outputPath + 'outputTrainingSet.mhd')
             writeMhd(outputValidSet.astype(np.uint8), outputPath + 'outputValidSet.mhd')
@@ -469,9 +478,12 @@ for epoch in range(E):  # loop over the dataset multiple times
                     writeMhd(outputValidSetProbMaps[j, :, :, :].squeeze(),
                              outputPath + 'outputValidSetProbMaps_label{0}_epoch{1}.mhd'.format(j, epoch))
 
-print('Finished Training')
-torch.save(unet.state_dict(), outputPath + 'unet.pt')
-torch.save(unet, outputPath + 'unetFullModel.pt')
+if not Test:
+    print('Finished Training')
+    torch.save(unet.state_dict(), outputPath + 'unet.pt')
+    torch.save(unet, outputPath + 'unetFullModel.pt')
+else:
+    print('Test Finished')
 
 
 
