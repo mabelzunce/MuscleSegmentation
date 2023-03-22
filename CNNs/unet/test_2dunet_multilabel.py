@@ -225,9 +225,6 @@ else:
 unet = Unet(1, multilabelNum)
 unet.load_state_dict(torch.load(unetFilename, map_location=device))
 
-inp = torch.rand(1, 1, dataSetImageSize_voxels[0], dataSetImageSize_voxels[1])
-out = unet(inp)
-
 ##
 print('Test Unet Input/Output sizes:\n Input size: {0}.\n Output shape: {1}'.format(inp.shape, out.shape))
 #tensorGroundTruth.shape
@@ -387,6 +384,8 @@ if Boxplot:
             outpath=(outputPath + 'trainingBoxplot_shortScale.png'), yscale=[0.7, 1.0], title='Training Dice Scores')
     boxplot(diceValid[1:], xlabel=xLabel[1:],
             outpath=(outputPath + 'validBoxplot.png'), yscale=[0, 1], title='Validation Dice Scores')
+    boxplot(diceValid[1:], xlabel=xLabel[1:],
+            outpath=(outputPath + 'validBoxplot_shortScale.png'), yscale=[0.7, 1.0], title='Validation Dice Scores')
     for k in range(multilabelNum):
         boxplot(data=(diceTraining[k], diceValid[k]),
                 xlabel=['Training Set', 'Valid Set'], outpath=(outputPath + labelNames[k] + '_boxplot.png'),
