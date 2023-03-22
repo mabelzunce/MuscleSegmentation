@@ -48,7 +48,7 @@ class Augment(enumerate):
 
 saveMhd = True        # Saves a mhd file for the output
 saveDataSetMhd = False  # Saves a Mhd file of the images and labels from dataset
-Background = False        # Background is considered as label
+Background = True       # Background is considered as label
 Boxplot = True           # Boxplot created in every best fit
 AugmentedTrainingSet = Augment.NA
 # Para correr la prueba corroborar que cantidad de filtros  establecidos  en "unet_2d" es igual a los del modelo
@@ -225,8 +225,7 @@ else:
 unet = Unet(1, multilabelNum)
 unet.load_state_dict(torch.load(unetFilename, map_location=device))
 
-##
-print('Test Unet Input/Output sizes:\n Input size: {0}.\n Output shape: {1}'.format(inp.shape, out.shape))
+
 #tensorGroundTruth.shape
 ##################################### U-NET TRAINING ############################################
 # Number of  batches:
