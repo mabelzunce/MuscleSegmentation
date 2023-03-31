@@ -50,7 +50,7 @@ saveMhd = True        # Saves a mhd file for the output
 saveDataSetMhd = False  # Saves a Mhd file of the images and labels from dataset
 Background = True       # Background is considered as label
 Boxplot = True           # Boxplot created in every best fit
-AugmentedTrainingSet = Augment.NA
+AugmentedTrainingSet = Augment.NL
 # Para correr la prueba corroborar que cantidad de filtros  establecidos  en "unet_2d" es igual a los del modelo
 
 ############################ DATA PATHS ##############################################
@@ -229,8 +229,8 @@ unet.load_state_dict(torch.load(unetFilename, map_location=device))
 #tensorGroundTruth.shape
 ##################################### U-NET TRAINING ############################################
 # Number of  batches:
-batchSize = 4
-devBatchSize = 4
+batchSize = 1
+devBatchSize = 1
 numBatches = np.ceil(trainingSet['input'].shape[0]/batchSize).astype(int)
 devNumBatches = np.ceil(devSet['input'].shape[0]/devBatchSize).astype(int)
 # Show results every printStep batches:
@@ -273,6 +273,19 @@ diceValid = [[] for n in range(multilabelNum)]
 
 diceTrainingEpoch = [[] for n in range(multilabelNum)]
 diceValidEpoch = [[] for n in range(multilabelNum)]
+
+sensTraining = [[] for n in range(multilabelNum)]
+sensValid = [[] for n in range(multilabelNum)]
+
+senTrainingEpoch = [[] for n in range(multilabelNum)]
+senValidEpoch = [[] for n in range(multilabelNum)]
+
+specTraining = [[] for n in range(multilabelNum)]
+specValid = [[] for n in range(multilabelNum)]
+
+specTrainingEpoch = [[] for n in range(multilabelNum)]
+specValidEpoch = [[] for n in range(multilabelNum)]
+
 #### TRAINING ####
 
 unet.train(False)
@@ -293,41 +306,40 @@ for i in range(numBatches):
         lossValuesTrainingSet.append(loss.item())
         lossValuesTrainingSetEpoch.append(loss.item())
 
-    #Print epoch iteration and loss value:
+        #Print epoch iteration and loss value:
 
-    create_csv(lossValuesTrainingSet, outputPath + 'TestLossIter.csv')
-    label = gt.cpu().numpy()
-    label = label.astype('int32')
-    segmentation = torch.sigmoid(outputs.cpu().to(torch.float32))
-    segmentation = maxProb(segmentation.detach().numpy(), multilabelNum)
-    segmentation = (segmentation > 0.5) * 1
-    if saveMhd:
-        outputTrainingSet[i*batchSize:(i+1)*batchSize] = multilabel(segmentation, multilabelNum, Background)
+        create_csv(lossValuesTrainingSet, outputPath + 'TestLossIter.csv')
+        label = gt.cpu().numpy()
+        label = label.astype('int32')
+        segmentation = torch.sigmoid(outputs.cpu().to(torch.float32))
+        segmentation = maxProb(segmentation.detach().numpy(), multilabelNum)
+        segmentation = (segmentation > 0.5) * 1
+        if saveMhd:
+            outputTrainingSet[i*batchSize:(i+1)*batchSize] = multilabel(segmentation, multilabelNum, Background)
 
-    for k in range(label.shape[0]):
-        for j in range(multilabelNum):
-            lbl = label[k, j, :, :]
-            seg = segmentation[k, j, :, :]
-            diceScore = dice2d(lbl, seg)
-            diceTraining[j].append(diceScore)
+        for k in range(label.shape[0]):
+            for j in range(multilabelNum):
+                lbl = label[k, j, :, :]
+                seg = segmentation[k, j, :, :]
+                diceScore = dice2d(lbl, seg)
+                specScore = specificity(lbl, seg)
+                sensScore = sensitivity(lbl, seg)
+                diceTraining[j].append(diceScore)
+                specTraining[j].append(specScore)
+                sensTraining[j].append(sensScore)
 
 for j in range(multilabelNum):
     diceTrainingEpoch[j].append(np.mean(diceTraining[j]))
     print('Training Dice Score: %f ' % np.mean(diceTraining[j]))
 
-avg_tloss = np.mean(lossValuesTrainingSetEpoch)
-lossValuesTrainingSetAllEpoch.append(avg_tloss)
-print('avg_tloss: %f' % avg_tloss)
 
 for k in range(multilabelNum):
     create_csv(diceTrainingEpoch[k], outputPath + 'TrainingDice_' + labelNames[k] + '.csv')
-create_csv(lossValuesTrainingSetAllEpoch, outputPath + 'TestLossEpoch.csv')
 
 
 
-#### VALIDATION ####
-unet.train(False)
-torch.cuda.empty_cache()
+
+    #### VALIDATION ####
 for i in range(devNumBatches):
     with torch.no_grad():
         inputs = torch.from_numpy(devSet['input'][i * devBatchSize:(i + 1) * devBatchSize, :, :, :]).to(device)
@@ -362,6 +374,9 @@ for i in range(devNumBatches):
             specScore = specificity(lbl, seg)
             sensScore = sensitivity(lbl, seg)
             diceValid[j].append(diceScore)
+            specValid[j].append(specScore)
+            sensValid[j].append(sensScore)
+
 for j in range(multilabelNum):
     diceValidEpoch[j].append(np.mean(diceValid[j]))
     print('Valid Dice Score:  %f ' % np.mean(diceValid[j]))
@@ -372,19 +387,27 @@ print('avg_vloss: %f' % avg_vloss)
 
 for k in range(multilabelNum):
     create_csv(diceValidEpoch[k], outputPath + 'ValidDice_' + labelNames[k] + '.csv')
-create_csv(lossValuesDevSetAllEpoch, outputPath + 'ValidLossEpoch.csv')
+
 
 
 #boxplot:
 if Boxplot:
-    boxplot(diceTraining[1:], xlabel=xLabel[1:],
+    boxplot(diceTraining[:], xlabel=xLabel[:],
             outpath=(outputPath + 'trainingBoxplot.png'), yscale=[0, 1], title='Training Dice Scores')
     boxplot(diceTraining[1:], xlabel=xLabel[1:],
             outpath=(outputPath + 'trainingBoxplot_shortScale.png'), yscale=[0.7, 1.0], title='Training Dice Scores')
-    boxplot(diceValid[1:], xlabel=xLabel[1:],
+    boxplot(diceValid[:], xlabel=xLabel[:],
             outpath=(outputPath + 'validBoxplot.png'), yscale=[0, 1], title='Validation Dice Scores')
     boxplot(diceValid[1:], xlabel=xLabel[1:],
             outpath=(outputPath + 'validBoxplot_shortScale.png'), yscale=[0.7, 1.0], title='Validation Dice Scores')
+    boxplot(sensTraining[:], xlabel=xLabel[:],
+            outpath=(outputPath + 'trainingSensitivityBoxplot.png'), yscale=[0, 1], title='Training Sensitivity Scores')
+    boxplot(sensValid[:], xlabel=xLabel[:],
+            outpath=(outputPath + 'validSensitivityBoxplot.png'), yscale=[0, 1], title='Validation Sensitivity Scores')
+    boxplot(specTraining[:], xlabel=xLabel[:],
+            outpath=(outputPath + 'trainingSpecificityBoxplot.png'), yscale=[0, 1], title='Training Specificity Scores')
+    boxplot(specValid[:], xlabel=xLabel[:],
+            outpath=(outputPath + 'validSpecificityBoxplot.png'), yscale=[0, 1], title='Valid Specificity Scores')
     for k in range(multilabelNum):
         boxplot(data=(diceTraining[k], diceValid[k]),
                 xlabel=['Training Set', 'Valid Set'], outpath=(outputPath + labelNames[k] + '_boxplot.png'),

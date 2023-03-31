@@ -70,28 +70,29 @@ def dice(reference, segmented):
     return score
 
 
-def sensitivity(reference, segmented):
-    if reference.shape != segmented.shape:
+def sensitivity(label, segmented):
+    if label.shape != segmented.shape:
         print('Error: shape')
         return 0
-    reference = reference > 0
+    label = label > 0
     segmented = segmented > 0
-    tp = (reference * segmented) * 1
-    fn = (~segmented * reference) * 1
+    tp = (label * segmented) * 1
+    fn = (~segmented * label) * 1
     score = tp.sum()/(tp.sum() + fn.sum())
     return score
 
 
-def specificity(reference, segmented):
-    if reference.shape != segmented.shape:
+def specificity(label, segmented):
+    if label.shape != segmented.shape:
         print('Error: shape')
         return 0
-    reference = reference == 0
-    segmented = segmented == 0
-    tn = (reference * segmented) * 1
-    fp = (~segmented * reference) * 1
+    label = label > 0
+    segmented = segmented > 0
+    tn = (~label * ~segmented) * 1
+    fp = (segmented * ~label) * 1
     score = tn.sum() / (tn.sum() + fp.sum())
     return score
+
 
 def maxProb(image, numlabels):
     outImage = np.zeros(image.shape)
