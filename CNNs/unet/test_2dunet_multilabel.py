@@ -50,7 +50,7 @@ saveMhd = True        # Saves a mhd file for the output
 saveDataSetMhd = False  # Saves a Mhd file of the images and labels from dataset
 Background = True       # Background is considered as label
 Boxplot = True           # Boxplot created in every best fit
-AugmentedTrainingSet = Augment.NL
+AugmentedTrainingSet = Augment.A
 # Para correr la prueba corroborar que cantidad de filtros  establecidos  en "unet_2d" es igual a los del modelo
 
 ############################ DATA PATHS ##############################################
