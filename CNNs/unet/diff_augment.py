@@ -7,7 +7,7 @@ import numpy as np
 datapath = '..\\..\\Data\\ModelDiff\\AugmentDiff\\'
 
 Augment = ['Standard', 'Linear', 'NonLinear', 'Augmented']
-muscleNames = ['LM', 'LP','LQ','RM','RP','RQ']
+muscleNames = ['LM', 'LP', 'LQ', 'RM', 'RP', 'RQ']
 Folders = [datapath + 'Standard', datapath + 'Linear', datapath + 'NonLinear', datapath + 'Augmented']
 
 DiceValues = [[] for n in range(len(Augment))]
