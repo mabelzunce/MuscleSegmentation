@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import csv
 
 
+
 def imshow_from_torch(img, imin=0, imax=1, ialpha = 1, icmap='gray'):
     #img = img / 2 + 0.5     # unnormalize
     npimg = img.numpy()
@@ -82,6 +83,18 @@ def sensitivity(label, segmented):
     return score
 
 
+def precision(label, segmented):
+    if label.shape != segmented.shape:
+        print('Error: shape')
+        return 0
+    label = label > 0
+    segmented = segmented > 0
+    tp = (label * segmented) * 1
+    fp = (segmented * ~label) * 1
+    score = tp.sum()/(tp.sum() + fp.sum())
+    return score
+
+
 def specificity(label, segmented):
     if label.shape != segmented.shape:
         print('Error: shape')
@@ -129,10 +142,13 @@ def pn_weights(trainingset, numlabels):         # positive to negative ratio
     return torch.tensor(weights)
 
 
-def rel_weights(trainingset, numlabels):        #positive to size ratio
+def rel_weights(trainingset, numlabels, background):        #positive to size ratio
     weights = np.zeros(numlabels)
     for k in range(numlabels):
-        weights[k] = trainingset.size/np.sum(trainingset == k)
+        if background:
+            weights[k] = trainingset.size / np.sum(trainingset == k)
+        else:
+            weights[k] = trainingset.size/np.sum(trainingset == (k+1))
     weights = weights / np.sum(weights)
     weights.resize((1, weights.size, 1, 1))
     return torch.tensor(weights)

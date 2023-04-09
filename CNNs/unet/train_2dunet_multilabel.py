@@ -48,20 +48,20 @@ class Augment(enumerate):
 
 
 DEBUG = False
-Test = True           # only runs one validation cycle
+Test = False           # only runs one validation cycle
 AMP = True              # Mixed Precision for larger batches and faster training
-saveMhd = True         # Saves a mhd file for the output
+saveMhd = False         # Saves a mhd file for the output
 saveDataSetMhd = False  # Saves a Mhd file of the images and labels from dataset
-LoadModel = True       # Pretrained model
-Background = True        # Background is considered as label
+LoadModel = False       # Pretrained model
+Background = False        # Background is considered as label
 Boxplot = True           # Boxplot created in every best fit
-AugmentedTrainingSet = Augment.L
+AugmentedTrainingSet = Augment.A
 ############################ DATA PATHS ##############################################
 trainingSetPath = '..\\..\\Data\\LumbarSpine2D\\TrainingSet\\'
 outputPath = '..\\..\\Data\\LumbarSpine2D\\model\\'
 modelLocation = '..\\..\\Data\\LumbarSpine2D\\PretrainedModel\\'
 
-if LoadModel or Test:
+if LoadModel:
     modelName = os.listdir(modelLocation)[0]
     unetFilename = modelLocation + modelName
 
@@ -223,7 +223,9 @@ if Background:
     criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights)
 else:
     xLabel = ['LM', 'RM', 'LQ', 'RQ', 'LP', 'RP']
-    criterion = nn.BCEWithLogitsLoss()
+    pos_weights = rel_weights(labelsTrainingSet, multilabelNum, Background)
+    pos_weights = pos_weights.to(device)
+    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights)
 
 unet = Unet(1, multilabelNum)
 optimizer = optim.Adam(unet.parameters(), lr=0.0001)
@@ -239,8 +241,8 @@ print('Test Unet Input/Output sizes:\n Input size: {0}.\n Output shape: {1}'.for
 #tensorGroundTruth.shape
 ##################################### U-NET TRAINING ############################################
 # Number of  batches:
-batchSize = 4
-devBatchSize = 4
+batchSize = 3
+devBatchSize = 3
 numBatches = np.ceil(trainingSet['input'].shape[0]/batchSize).astype(int)
 devNumBatches = np.ceil(devSet['input'].shape[0]/devBatchSize).astype(int)
 # Show results every printStep batches:
@@ -256,8 +258,8 @@ gtDevSet = torch.from_numpy(devSet['output'])
 # Train
 best_vloss = 1
 
-skip_plot = 100        # early epoch loss values tend to hide later values
-skip_model = 100            # avoids saving dataset images for the early epochs
+skip_plot = 10        # early epoch loss values tend to hide later values
+skip_model = 10            # avoids saving dataset images for the early epochs
 
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
@@ -277,14 +279,10 @@ diceValidEpoch = [[] for n in range(multilabelNum)]
 iter = 0
 deviter = 0
 
-E = 500
-if Test:
-    E = 1
-    skip_model = 0
 
 torch.cuda.empty_cache()
 unet.to(device)
-for epoch in range(E):  # loop over the dataset multiple times
+for epoch in range(50):  # loop over the dataset multiple times
     epochNumbers.append(epoch)
     if saveMhd:
         outputTrainingSet = np.zeros(trainingSetShape)
@@ -299,72 +297,71 @@ for epoch in range(E):  # loop over the dataset multiple times
     diceTraining = [[] for n in range(multilabelNum)]
     diceValid = [[] for n in range(multilabelNum)]
 
-    if not Test:
-        #### TRAINING ####
-        scaler = torch.cuda.amp.GradScaler()
-        unet.train(True)
-        for i in range(numBatches):
-            # get the inputs
-            inputs = torch.from_numpy(trainingSet['input'][i*batchSize:(i+1)*batchSize, :, :, :]).to(device)
-            gt = torch.from_numpy(trainingSet['output'][i*batchSize:(i+1)*batchSize, :, :, :]).to(device)
-            gt = F.one_hot(gt.to(torch.int64))
-            gt = torch.squeeze(torch.transpose(gt, 1, 4), 4)
-            gt = gt.float()
-            if not Background:
-                gt = gt[:, 1:, :, :]
-            # zero the parameter gradients
-            optimizer.zero_grad()
-            if AMP:
-                with torch.cuda.amp.autocast(enabled=True, dtype=torch.float16, cache_enabled=True):
-                    outputs = unet(inputs)
-                    loss = criterion(outputs, gt)
-                scaler.scale(loss).backward()
-                scaler.step(optimizer)
-                scaler.update()
-            else:
+    #### TRAINING ####
+    scaler = torch.cuda.amp.GradScaler()
+    unet.train(True)
+    for i in range(numBatches):
+        # get the inputs
+        inputs = torch.from_numpy(trainingSet['input'][i*batchSize:(i+1)*batchSize, :, :, :]).to(device)
+        gt = torch.from_numpy(trainingSet['output'][i*batchSize:(i+1)*batchSize, :, :, :]).to(device)
+        gt = F.one_hot(gt.to(torch.int64))
+        gt = torch.squeeze(torch.transpose(gt, 1, 4), 4)
+        gt = gt.float()
+        if not Background:
+            gt = gt[:, 1:, :, :]
+        # zero the parameter gradients
+        optimizer.zero_grad()
+        if AMP:
+            with torch.cuda.amp.autocast(enabled=True, dtype=torch.float16, cache_enabled=True):
                 outputs = unet(inputs)
                 loss = criterion(outputs, gt)
-                loss.backward()
-                optimizer.step()
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            outputs = unet(inputs)
+            loss = criterion(outputs, gt)
+            loss.backward()
+            optimizer.step()
 
-            # Save loss values:
-            lossValuesTrainingSet.append(loss.item())
-            lossValuesTrainingSetEpoch.append(loss.item())
-            iterationNumbers.append(iter)
-            #Print epoch iteration and loss value:
-            print('[%d, %5d] loss: %.3f' % (epoch, i, loss.item()))
-            # Update iteration number:
-            iter = iter + 1
-            create_csv(lossValuesTrainingSet, outputPath + 'TestLossIter.csv')
-            label = gt.cpu().numpy()
-            label = label.astype('int32')
-            segmentation = torch.sigmoid(outputs.cpu().to(torch.float32))
-            segmentation = maxProb(segmentation.detach().numpy(), multilabelNum)
-            segmentation = (segmentation > 0.5) * 1
-            if saveMhd:
-                outputTrainingSet[i*batchSize:(i+1)*batchSize] = multilabel(segmentation, multilabelNum, Background)
-                if DEBUG:
-                    outputsNumpy = outputs.cpu().to(torch.float32).detach().numpy()
-                    outputTrainingSetProbMaps[:, i * batchSize:(i + 1) * batchSize,:,:] = outputsNumpy.transpose((1,0,2,3))
+        # Save loss values:
+        lossValuesTrainingSet.append(loss.item())
+        lossValuesTrainingSetEpoch.append(loss.item())
+        iterationNumbers.append(iter)
+        #Print epoch iteration and loss value:
+        print('[%d, %5d] loss: %.3f' % (epoch, i, loss.item()))
+        # Update iteration number:
+        iter = iter + 1
+        create_csv(lossValuesTrainingSet, outputPath + 'TestLossIter.csv')
+        label = gt.cpu().numpy()
+        label = label.astype('int32')
+        segmentation = torch.sigmoid(outputs.cpu().to(torch.float32))
+        segmentation = maxProb(segmentation.detach().numpy(), multilabelNum)
+        segmentation = (segmentation > 0.5) * 1
+        if saveMhd:
+            outputTrainingSet[i*batchSize:(i+1)*batchSize] = multilabel(segmentation, multilabelNum, Background)
+            if DEBUG:
+                outputsNumpy = outputs.cpu().to(torch.float32).detach().numpy()
+                outputTrainingSetProbMaps[:, i * batchSize:(i + 1) * batchSize,:,:] = outputsNumpy.transpose((1,0,2,3))
 
-            for k in range(label.shape[0]):
-                for j in range(multilabelNum):
-                    lbl = label[k, j, :, :]
-                    seg = segmentation[k, j, :, :]
-                    diceScore = dice2d(lbl, seg)
-                    diceTraining[j].append(diceScore)
+        for k in range(label.shape[0]):
+            for j in range(multilabelNum):
+                lbl = label[k, j, :, :]
+                seg = segmentation[k, j, :, :]
+                diceScore = dice2d(lbl, seg)
+                diceTraining[j].append(diceScore)
 
-        for j in range(multilabelNum):
-            diceTrainingEpoch[j].append(np.mean(diceTraining[j]))
-            print('Training Dice Score: %f ' % np.mean(diceTraining[j]))
+    for j in range(multilabelNum):
+        diceTrainingEpoch[j].append(np.mean(diceTraining[j]))
+        print('Training Dice Score: %f ' % np.mean(diceTraining[j]))
 
-        avg_tloss = np.mean(lossValuesTrainingSetEpoch)
-        lossValuesTrainingSetAllEpoch.append(avg_tloss)
-        print('avg_tloss: %f' % avg_tloss)
+    avg_tloss = np.mean(lossValuesTrainingSetEpoch)
+    lossValuesTrainingSetAllEpoch.append(avg_tloss)
+    print('avg_tloss: %f' % avg_tloss)
 
-        for k in range(multilabelNum):
-            create_csv(diceTrainingEpoch[k], outputPath + 'TrainingDice_' + labelNames[k] + '.csv')
-        create_csv(lossValuesTrainingSetAllEpoch, outputPath + 'TestLossEpoch.csv')
+    for k in range(multilabelNum):
+        create_csv(diceTrainingEpoch[k], outputPath + 'TrainingDice_' + labelNames[k] + '.csv')
+    create_csv(lossValuesTrainingSetAllEpoch, outputPath + 'TestLossEpoch.csv')
 
 
 
@@ -478,12 +475,10 @@ for epoch in range(E):  # loop over the dataset multiple times
                     writeMhd(outputValidSetProbMaps[j, :, :, :].squeeze(),
                              outputPath + 'outputValidSetProbMaps_label{0}_epoch{1}.mhd'.format(j, epoch))
 
-if not Test:
-    print('Finished Training')
-    torch.save(unet.state_dict(), outputPath + 'unet.pt')
-    torch.save(unet, outputPath + 'unetFullModel.pt')
-else:
-    print('Test Finished')
+
+print('Finished Training')
+torch.save(unet.state_dict(), outputPath + 'unet.pt')
+torch.save(unet, outputPath + 'unetFullModel.pt')
 
 
 
