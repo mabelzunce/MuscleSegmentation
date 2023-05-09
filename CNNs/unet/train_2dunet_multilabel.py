@@ -211,19 +211,21 @@ labelsValidSet = labelsValidSet.astype(np.float32)
 trainingSet = dict([('input', imagesTrainingSet[:, :, :, :]), ('output', labelsTrainingSet[:, :, :, :])])
 devSet = dict([('input', imagesValidSet[:, :, :, :]), ('output', labelsValidSet[:,:,:,:])])
 print('Data set size. Training set: {0}. Dev set: {1}.'.format(trainingSet['input'].shape[0], devSet['input'].shape[0]))
-labelNames = ('Background ', 'Left Multifidus', 'Right Multifidus ', 'Left Quadratus ', 'Right Quadratus ', 'Left Psoas ', 'Right Psoas ' )
+
 ####################### CREATE A U-NET MODEL #############################################
 # Create a UNET with one input and multiple output canal.
 multilabelNum = 6
 if Background:
     multilabelNum += 1
+    labelNames = ('Background ', 'Left Multifidus', 'Right Multifidus ', 'Left Quadratus ', 'Right Quadratus ', 'Left Psoas ','Right Psoas ')
     xLabel = ['BG', 'LM', 'RM', 'LQ', 'RQ', 'LP', 'RP']
-    pos_weights = rel_weights(labelsTrainingSet, multilabelNum)
+    pos_weights = rel_weights(labelsTrainingSet, multilabelNum, Background)
     pos_weights = pos_weights.to(device)
     criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights)
 else:
+    labelNames = ('Left Multifidus', 'Right Multifidus ', 'Left Quadratus ', 'Right Quadratus ', 'Left Psoas ','Right Psoas ')
     xLabel = ['LM', 'RM', 'LQ', 'RQ', 'LP', 'RP']
-    pos_weights = rel_weights(labelsTrainingSet, multilabelNum, Background)
+    pos_weights = rel_weights(labelsTrainingSet, multilabelNum,Background)
     pos_weights = pos_weights.to(device)
     criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights)
 
@@ -479,9 +481,3 @@ for epoch in range(50):  # loop over the dataset multiple times
 print('Finished Training')
 torch.save(unet.state_dict(), outputPath + 'unet.pt')
 torch.save(unet, outputPath + 'unetFullModel.pt')
-
-
-
-
-
-

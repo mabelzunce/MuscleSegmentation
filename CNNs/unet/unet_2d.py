@@ -92,8 +92,8 @@ class Unet(nn.Module):
         self.up1 = Up(1024, 256)
         self.up2 = Up(512, 128)
         self.up3 = Up(256, 64)
-        self.up4 = Up(128, 32)
-        self.outc = OutConv(32, classes)
+        self.up4 = Up(128, 64)
+        self.outc = OutConv(64, classes)
 
     def forward(self, x):
         x1 = self.inc(x)

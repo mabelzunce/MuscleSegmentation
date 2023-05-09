@@ -133,10 +133,13 @@ def writeMhd(image, outpath):
     sitk.WriteImage(img, outpath)
 
 
-def pn_weights(trainingset, numlabels):         # positive to negative ratio
+def pn_weights(trainingset, numlabels, background):         # positive to negative ratio
     weights = np.zeros(numlabels)
     for k in range(numlabels):
-        weights[k] = (trainingset.size - np.sum(trainingset == k))/np.sum(trainingset == k)
+        if background:
+            weights[k] = (trainingset.size - np.sum(trainingset == k))/np.sum(trainingset == k)
+        else:
+            weights[k] = (trainingset.size - np.sum(trainingset == (k+1))) / np.sum(trainingset == (k+1))
     weights = weights/np.sum(weights)
     weights.resize((1, weights.size, 1, 1))
     return torch.tensor(weights)
