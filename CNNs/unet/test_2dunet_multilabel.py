@@ -12,19 +12,12 @@ from utils import sensitivity
 from utils import precision
 from utils import maxProb
 from utils import writeMhd
-from utils import multilabel
+from utils import filtered_multilabel
 from utils import boxplot
+from utils import labelfilter
 from utils import DiceLoss
 from utils import pn_weights
 from utils import rel_weights
-import torch
-import torchvision
-import torchvision.transforms as transforms
-from torchvision.utils import draw_segmentation_masks
-import torch.optim as optim
-
-from torch import nn
-from torch.utils.data import DataLoader
 
 
 #from sklearn.model_selection import train_test_split
@@ -35,10 +28,10 @@ from unet_2d import Unet
 #from utils import MSE
 import torch
 import torch.nn as nn
-import torchvision
+
 
 import torch.nn.functional as F
-from torchvision.utils import make_grid
+
 
 class Augment(enumerate):
     NA = 0  # No Augment
@@ -324,7 +317,7 @@ for i in range(numBatches):
         segmentation = maxProb(segmentation.detach().numpy(), multilabelNum)
         segmentation = (segmentation > 0.5) * 1
         if saveMhd:
-            outputTrainingSet[i*batchSize:(i+1)*batchSize] = multilabel(segmentation, multilabelNum, Background)
+            outputTrainingSet[i*batchSize:(i+1)*batchSize] = filtered_multilabel(segmentation, multilabelNum, Background)
 
         for k in range(label.shape[0]):
             for j in range(multilabelNum):
@@ -375,11 +368,12 @@ for i in range(devNumBatches):
     segmentation = maxProb(segmentation.detach().numpy(), multilabelNum)
     segmentation = (segmentation > 0.5) * 1
     if saveMhd:
-        outputValidSet[i * devBatchSize:(i + 1) * devBatchSize] = multilabel(segmentation, multilabelNum, Background)
+        outputValidSet[i * devBatchSize:(i + 1) * devBatchSize] = filtered_multilabel(segmentation, multilabelNum, Background)
 
     for k in range(label.shape[0]):
         for j in range(multilabelNum):
             lbl = label[k, j, :, :]
+            #lbl = labelfilter(lbl)
             seg = segmentation[k, j, :, :]
             diceScore = dice2d(lbl, seg)
             specScore = specificity(lbl, seg)

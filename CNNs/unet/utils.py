@@ -128,6 +128,32 @@ def multilabel(image, numlabels, Background):
     return outImage
 
 
+def labelfilter(image):
+    filteredImage = sitk.GetImageFromArray(image)
+    cc = sitk.ConnectedComponent(filteredImage)             #connected components
+    stats = sitk.LabelShapeStatisticsImageFilter()
+    stats.Execute(cc)
+    largest_label = max(stats.GetLabels(), key=lambda x: stats.GetPhysicalSize(x))
+    filteredImage = sitk.BinaryThreshold(cc, lowerThreshold=largest_label, upperThreshold=largest_label, insideValue=1,
+                                      outsideValue=0)
+    filteredImage = sitk.GetArrayFromImage(filteredImage)
+    return filteredImage
+
+
+def filtered_multilabel(image, numlabels, Background): #usar cuando se segmentan imagenes nuevas
+    shape = image.shape
+    shape = list(shape)
+    shape.remove(numlabels)
+    outImage = np.zeros(shape)
+    for k in range(numlabels):
+        filteredImage = labelfilter(image[:, k, :, :])
+        if Background:
+            outImage = outImage + filteredImage * k
+        else:
+            outImage = outImage + filteredImage * (k + 1)
+    return outImage
+
+
 def writeMhd(image, outpath):
     img = sitk.GetImageFromArray(image)
     sitk.WriteImage(img, outpath)
