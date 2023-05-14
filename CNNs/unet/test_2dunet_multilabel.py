@@ -12,6 +12,7 @@ from utils import sensitivity
 from utils import precision
 from utils import maxProb
 from utils import writeMhd
+from utils import multilabel
 from utils import filtered_multilabel
 from utils import boxplot
 from utils import labelfilter
@@ -317,7 +318,7 @@ for i in range(numBatches):
         segmentation = maxProb(segmentation.detach().numpy(), multilabelNum)
         segmentation = (segmentation > 0.5) * 1
         if saveMhd:
-            outputTrainingSet[i*batchSize:(i+1)*batchSize] = filtered_multilabel(segmentation, multilabelNum, Background)
+            outputTrainingSet[i*batchSize:(i+1)*batchSize] = multilabel(segmentation, multilabelNum, Background)
 
         for k in range(label.shape[0]):
             for j in range(multilabelNum):

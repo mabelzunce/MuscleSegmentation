@@ -129,15 +129,16 @@ def multilabel(image, numlabels, Background):
 
 
 def labelfilter(image):
-    filteredImage = sitk.GetImageFromArray(image)
-    cc = sitk.ConnectedComponent(filteredImage)             #connected components
+    filteredimage = sitk.GetImageFromArray(image)
+    cc = sitk.ConnectedComponent(filteredimage)             #connected components
     stats = sitk.LabelShapeStatisticsImageFilter()
     stats.Execute(cc)
     largest_label = max(stats.GetLabels(), key=lambda x: stats.GetPhysicalSize(x))
-    filteredImage = sitk.BinaryThreshold(cc, lowerThreshold=largest_label, upperThreshold=largest_label, insideValue=1,
+    filteredimage = sitk.BinaryThreshold(cc, lowerThreshold=largest_label, upperThreshold=largest_label, insideValue=1,
                                       outsideValue=0)
-    filteredImage = sitk.GetArrayFromImage(filteredImage)
-    return filteredImage
+    #filteredimage = sitk.BinaryFillhole(filteredimage)     #no parece funcionar
+    filteredimage = sitk.GetArrayFromImage(filteredimage)
+    return filteredimage
 
 
 def filtered_multilabel(image, numlabels, Background): #usar cuando se segmentan imagenes nuevas
