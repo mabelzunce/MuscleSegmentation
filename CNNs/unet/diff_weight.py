@@ -12,18 +12,6 @@ Folders = [datapath + Weight[0], datapath + Weight[1], datapath + Weight[2]]
 DiceValues = [[] for n in range(len(Weight))]
 BestVlossRow = []
 
-#for f in Folders:
-#    Lossfile = os.listdir(f)[6]
-#    Lossfile = os.path.join(f, Lossfile)
-#    with open(Lossfile) as file:
-#        csv_reader = csv.reader(file)
-#        next(csv_reader)  # Skip the header row
-#        min_value = 1
-#        for row in csv_reader:
-#            if min_value > float(row[1]):
-#                min_value = float(row[1])
-#                rowNum = int(row[0])
-#    BestVlossRow.append(rowNum)
 
 for i, f in enumerate(Folders):        # Weight Filenames
     muscles = os.listdir(f)[:6]        # Lists Muscles per Augment
@@ -34,7 +22,6 @@ for i, f in enumerate(Folders):        # Weight Filenames
             csv_reader = csv.reader(file)
             next(csv_reader)
             for row in csv_reader:
-#                if int(row[0]) == BestVlossRow[i]:
                 Value = float(row[1])
                 sumValue += Value
                 DiceValues[i].append(Value)

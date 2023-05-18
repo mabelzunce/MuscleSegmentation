@@ -49,9 +49,9 @@ AugmentedTrainingSet = Augment.A
 # Para correr la prueba corroborar que cantidad de filtros  establecidos  en "unet_2d" es igual a los del modelo
 
 ############################ DATA PATHS ##############################################
-trainingSetPath = '..\\..\\Data\\LumbarSpine2D\\TrainingSet\\'
-outputPath = '..\\..\\Data\\LumbarSpine2D\\model\\'
-modelLocation = '..\\..\\Data\\LumbarSpine2D\\PretrainedModel\\'
+trainingSetPath = '../../Data/LumbarSpine2D/TrainingSet/'
+outputPath = '../../Data/LumbarSpine2D/model/'
+modelLocation = '../../Data/LumbarSpine2D/PretrainedModel/'
 
 
 modelName = os.listdir(modelLocation)[0]

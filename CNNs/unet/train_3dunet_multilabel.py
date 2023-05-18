@@ -29,7 +29,7 @@ from torch.utils.data import DataLoader
 #from sklearn.model_selection import train_test_split
 
 
-from unet_2d import Unet
+from unet_3d import Unet
 #from utils import imshow
 #from utils import MSE
 import torch
