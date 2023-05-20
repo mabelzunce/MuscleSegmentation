@@ -5,7 +5,6 @@ import os
 import math
 from datetime import datetime
 from utils import create_csv
-from utils import imshow_from_torch
 from utils import dice2d
 from utils import specificity
 from utils import sensitivity
@@ -51,21 +50,25 @@ DEBUG = False
 AMP = True              # Mixed Precision for larger batches and faster training
 saveMhd = True         # Saves a mhd file for the output
 saveDataSetMhd = False  # Saves a Mhd file of the images and labels from dataset
-LoadModel = True       # Pretrained model
+LoadModel = False      # Pretrained model
 Background = True        # Background is considered as label
 Boxplot = True           # Boxplot created in every best fit
-AugmentedTrainingSet = Augment.L
+AugmentedTrainingSet = Augment.NA
 ############################ DATA PATHS ##############################################
-trainingSetPath = '..\\..\\Data\\LumbarSpine2D\\TrainingSet\\'
-outputPath = '..\\..\\Data\\LumbarSpine2D\\model\\'
-modelLocation = '..\\..\\Data\\LumbarSpine2D\\PretrainedModel\\'
+trainingSetPath = '../../Data/LumbarSpine3D/TrainingSet/'
+outputPath = '../../Data/LumbarSpine3D/model/'
+modelLocation = '../../Data/LumbarSpine3D/PretrainedModel/'
+
+if not os.path.exists(outputPath):
+    os.makedirs(outputPath)
+if not os.path.exists(trainingSetPath):
+    os.makedirs(trainingSetPath)
+if not os.path.exists(modelLocation):
+    os.makedirs(modelLocation)
 
 if LoadModel:
     modelName = os.listdir(modelLocation)[0]
     unetFilename = modelLocation + modelName
-
-if not os.path.exists(outputPath):
-    os.makedirs(outputPath)
 
 # Image format extension:
 extensionShortcuts = 'lnk'
@@ -89,6 +92,7 @@ print(device)
 ###################### READ DATA AND PRE PROCESS IT FOR TRAINING DATA SETS #####################################################
 # Look for the folders or shortcuts:
 files = os.listdir(trainingSetPath)
+files = sorted(files)
 atlasNames = [] # Names of the atlases
 atlasImageFilenames = [] # Filenames of the intensity images
 atlasLabelsFilenames = [] # Filenames of the label images
@@ -103,9 +107,9 @@ subjects.append(subject)
 for filename in files:
     name, extension = os.path.splitext(filename)
     # Substract the tagInPhase:
-    atlasName = name
+    atlasName = name.split('_')[0]
     # Check if filename is the in phase header and the labels exists:
-    filenameImages = trainingSetPath + filename
+    filenameImages = trainingSetPath + atlasName + '_I' + '.' + extensionImages
     filenameLabels = trainingSetPath + atlasName + tagLabels + '.' + extensionImages
     if extension.endswith(extensionImages) and os.path.exists(filenameLabels):
         # Atlas name:
@@ -120,7 +124,7 @@ for filename in files:
         subjectAdd = filename.split('_')[1]
         if subject == subjectName:
             numImagesPerSubject += 1
-            if not (subjectName.startswith(subjectAdd[0])):
+            if not (subjectName.startswith(subjectAdd)):
                 numRot += 1
         if not (subjects.__contains__(subjectName)):
             numSubjects += 1
@@ -143,10 +147,11 @@ k = 0
 j = 0
 # Data set avoids mixing same subject images
 for i in range(0, datasize):
-    name1, name2 = atlasNames[i].split('_')[:2]
+    #name1, name2 = atlasNames[i].split('_')[:2]
     match AugmentedTrainingSet:
         case 0:
-            condition1 = (trainingSubjects.__contains__(name1)) and (name2 == name1)
+            #condition1 = (trainingSubjects.__contains__(name1)) and (name2 == 'I')
+            condition1 = (trainingSubjects.__contains__(atlasNames[i]))
         case 1:
             condition1 = (trainingSubjects.__contains__(name1)) and (trainingSubjects.__contains__(name2))
         case 2:
@@ -155,7 +160,7 @@ for i in range(0, datasize):
         case 3:
             condition1 = (trainingSubjects.__contains__(name1)) and (not (validSubjects.__contains__(name2)))
 
-    condition2 = (validSubjects.__contains__(name1)) and (name2 == name1)
+    condition2 = (validSubjects.__contains__(atlasNames[i]))
 
     atlasImage = sitk.ReadImage(atlasImageFilenames[i])
     atlasLabels = sitk.ReadImage(atlasLabelsFilenames[i])
@@ -177,8 +182,8 @@ for i in range(0, datasize):
         k += 1
 
     if condition2:
-        imagesValidSet[j, :, :, :] = np.reshape(sitk.GetArrayFromImage(atlasImage), [1, atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
-        labelsValidSet[j, :, :, :] = np.reshape(sitk.GetArrayFromImage(atlasLabels), [1, atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
+        imagesValidSet[j, :, :, :] = np.reshape(sitk.GetArrayFromImage(atlasImage), [1, atlasImage.GetSize()[2], atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
+        labelsValidSet[j, :, :, :] = np.reshape(sitk.GetArrayFromImage(atlasLabels), [1, atlasImage.GetSize()[2], atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
         j += 1
 if saveDataSetMhd:
     writeMhd(imagesTrainingSet.astype(np.float32), outputPath + 'images_training_set.mhd')
