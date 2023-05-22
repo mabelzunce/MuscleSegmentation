@@ -129,15 +129,20 @@ def multilabel(image, numlabels, Background):
 
 
 def labelfilter(image):
-    filteredimage = sitk.GetImageFromArray(image)
-    cc = sitk.ConnectedComponent(filteredimage)             #connected components
+    filteredimage = sitk.GetImageFromArray(image)   # imagen binaria
+    cc = sitk.ConnectedComponent(filteredimage)     # detecta cada uno de los connected components y le asigna un valor
     stats = sitk.LabelShapeStatisticsImageFilter()
     stats.Execute(cc)
-    largest_label = max(stats.GetLabels(), key=lambda x: stats.GetPhysicalSize(x))
+    largest_label = max(stats.GetLabels(), key=lambda x: stats.GetPhysicalSize(x)) # busco el valor del cc mas grande
     filteredimage = sitk.BinaryThreshold(cc, lowerThreshold=largest_label, upperThreshold=largest_label, insideValue=1,
-                                      outsideValue=0)
-    #filteredimage = sitk.BinaryFillhole(filteredimage)     #no parece funcionar
-    filteredimage = sitk.GetArrayFromImage(filteredimage)
+                                      outsideValue=0) # filtro unicamente el cc mas grande. Descarto sobresegmentaciones
+    filteredimage = sitk.Not(filteredimage) # ~ mi imagen filtrada. El fondo y los huecos dentro de mi cc serán 1
+    cc = sitk.ConnectedComponent(filteredimage)
+    stats.Execute(cc)
+    largest_label = max(stats.GetLabels(), key=lambda x: stats.GetPhysicalSize(x)) #busco el valor del label del fondo
+    filtered_image = sitk.BinaryThreshold(cc, lowerThreshold=largest_label, upperThreshold=largest_label, insideValue=1,
+                                      outsideValue=0) #filtro unicamente el fondo eliminando los huecos de mi CC
+    filteredimage = sitk.GetArrayFromImage(sitk.Not(filtered_image))
     return filteredimage
 
 
