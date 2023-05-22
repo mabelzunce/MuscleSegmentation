@@ -45,7 +45,7 @@ saveMhd = True        # Saves a mhd file for the output
 saveDataSetMhd = True  # Saves a Mhd file of the images and labels from dataset
 Background = False       # Background is considered as label
 Boxplot = True           # Boxplot created in every best fit
-AugmentedTrainingSet = Augment.NA
+AugmentedTrainingSet = Augment.A
 # Para correr la prueba corroborar que cantidad de filtros  establecidos  en "unet_2d" es igual a los del modelo
 
 ############################ DATA PATHS ##############################################
@@ -82,6 +82,7 @@ print(device)
 ###################### READ DATA AND PRE PROCESS IT FOR TRAINING DATA SETS #####################################################
 # Look for the folders or shortcuts:
 files = os.listdir(trainingSetPath)
+files = sorted(files)
 atlasNames = [] # Names of the atlases
 atlasImageFilenames = [] # Filenames of the intensity images
 atlasLabelsFilenames = [] # Filenames of the label images

@@ -5,7 +5,7 @@ import os
 from unet_2d import Unet
 import torch
 from utils import writeMhd
-from utils import maxProb
+
 from utils import filtered_multilabel
 
 ############################ DATA PATHS ##############################################
@@ -35,6 +35,7 @@ if device.type == 'cuda':
 ###################### READ DATA AND PRE PROCESS IT FOR TRAINING DATA SETS #####################################################
 # Look for the folders or shortcuts:
 files = os.listdir(dataPath)
+files = sorted(files)
 imageNames = []
 imageFilenames = []
 i = 0
