@@ -72,10 +72,13 @@ print("List of atlases: {0}\n".format(atlasNames))
 
 
 ################################### REFERENCE IMAGE FOR THE REGISTRATION #######################
-indexReference = 0
+indexReference = 10
 referenceSliceImage = sitk.ReadImage(atlasImageFilenames[indexReference])    #Es una Reference image no un Reference slice image
 print('Reference image: {0}. Voxel size: {1}'.format(atlasImageFilenames[indexReference], referenceSliceImage.GetSize()))
-
+x_min = 800
+x_max = 0
+y_min = 640
+y_max = 0
 ################################### READ IMAGES, EXTRACT SLICES AND REGISTER IMAGES TO THE REFERENCE ########################################
 for i in range(0, len(atlasNames)):
     print('Altas:{0}\n'.format(atlasImageFilenames[i]))
@@ -112,9 +115,23 @@ for i in range(0, len(atlasNames)):
     transformixImageFilter.Execute()
     atlasSliceManLabel = sitk.Cast(transformixImageFilter.GetResultImage(), sitk.sitkUInt8)
     # Crop The resulting image
+    labelArea = sitk.GetArrayFromImage(atlasSliceManLabel) > 0
+    labelArea = np.bitwise_or.reduce(labelArea, axis=0) * 1
+    labelArea = sitk.GetImageFromArray(labelArea)
 
-    # atlasSliceImage = atlasSliceImage[100:700, 160:480, :]
-    # atlasSliceManLabel = atlasSliceManLabel[100:700, 160:480, :]
+    label_stats_filter = sitk.LabelShapeStatisticsImageFilter()
+    label_stats_filter.Execute(labelArea)
+    bounding_box = label_stats_filter.GetBoundingBox(1)
+    x_min, y_min, x_max, y_max = bounding_box
+
+    if x_min < x_min_Crop:
+        x_min_Crop = x_min
+    if y_min < y_min_Crop:
+        y_min_Crop = y_min
+    if x_max > x_max_Crop:
+        x_max_Crop = x_max
+    if y_max > y_max_Crop:
+        y_max_Crop = y_max
 
     # write the 3d images:
     sitk.WriteImage(atlasSliceImage, outputPath + atlasNames[i] + '.' + extensionImages)
