@@ -5,13 +5,12 @@ import os
 from unet_2d import Unet
 import torch
 from utils import writeMhd
-
 from utils import filtered_multilabel
 
 ############################ DATA PATHS ##############################################
-dataPath = '..\\..\\Data\\LumbarSpine2D\\TestSubjects\\'
-outputPath = '..\\..\\Data\\LumbarSpine2D\\model\\'
-modelLocation = '..\\..\\Data\\LumbarSpine2D\\PretrainedModel\\'
+dataPath = '../../Data/LumbarSpine2D/TestSubjects/'
+outputPath = '../../Data/LumbarSpine2D/model/'
+modelLocation = '../../Data/LumbarSpine2D/PretrainedModel/'
 # Image format extension:
 extensionImages = 'mhd'
 

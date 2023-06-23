@@ -212,8 +212,6 @@ if Background:
 else:
     labelNames = ('Left Multifidus', 'Right Multifidus ', 'Left Quadratus ', 'Right Quadratus ', 'Left Psoas ','Right Psoas ')
     xLabel = ['LM', 'RM', 'LQ', 'RQ', 'LP', 'RP']
-    pos_weights = rel_weights(labelsTrainingSet, multilabelNum,Background)
-    pos_weights = pos_weights.to(device)
     criterion = nn.BCEWithLogitsLoss()
 
 unet = Unet(1, multilabelNum)
@@ -270,7 +268,7 @@ out = unet(inp)
 torch.cuda.empty_cache()
 unet.to(device)
 
-for epoch in range(500):  # loop over the dataset multiple times
+for epoch in range(200):  # loop over the dataset multiple times
     epochNumbers.append(epoch)
     if saveMhd:
         outputTrainingSet = np.zeros(trainingSetShape)
