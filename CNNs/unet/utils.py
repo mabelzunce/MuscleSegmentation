@@ -25,6 +25,14 @@ def swap_labels(img, label1=0, label2=1):
     return img
 
 
+def flip_image(image, axis, spacing):
+    image = sitk.GetArrayFromImage(image)
+    image = np.flip(image, axis)
+    image = sitk.GetImageFromArray(image)
+    image.SetSpacing(spacing)
+    return image
+
+
 def create_csv(vector, outpath):
     data = []
     for i in range(len(vector)):
