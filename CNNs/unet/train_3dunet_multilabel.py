@@ -28,7 +28,7 @@ DEBUG = False
 AMP = False             # Mixed Precision for larger batches and faster training
 saveMhd = False         # Saves a mhd file for the output
 saveDataSetMhd = False  # Saves a Mhd file of the images and labels from dataset
-LoadModel = True      # Pretrained model
+LoadModel = False      # Pretrained model
 Background = False        # Background is considered as label
 Boxplot = True           # Boxplot created in every best fit
 AugmentedTrainingSet = Augment.NA
@@ -64,7 +64,7 @@ trainingSetRelSize = 0.8
 devSetRelSize = 1 - trainingSetRelSize
 
 ######################### CHECK DEVICE ######################
-device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(device)
 
 ###################### READ DATA AND PRE PROCESS IT FOR TRAINING DATA SETS #####################################################
