@@ -16,25 +16,14 @@ from utils import boxplot
 from utils import DiceLoss
 from utils import pn_weights
 from utils import rel_weights
-import torch
-import torchvision
-import torchvision.transforms as transforms
-from torchvision.utils import draw_segmentation_masks
-import torch.optim as optim
-
-from torch import nn
-from torch.utils.data import DataLoader
-
-
-#from sklearn.model_selection import train_test_split
 
 
 from unet_2d import Unet
-#from utils import imshow
-#from utils import MSE
 import torch
 import torch.nn as nn
+import torch.optim as optim
 import torchvision
+from torch.utils.data import DataLoader
 
 import torch.nn.functional as F
 from torchvision.utils import make_grid
@@ -46,20 +35,19 @@ class Augment(enumerate):
     L = 2  # Linear
     A = 3   #Augmented
 
-
 DEBUG = False
 Test = False           # only runs one validation cycle
-AMP = True              # Mixed Precision for larger batches and faster training
+AMP = False             # Mixed Precision for larger batches and faster training
 saveMhd = False         # Saves a mhd file for the output
-saveDataSetMhd = False  # Saves a Mhd file of the images and labels from dataset
+saveDataSetMhd = False # Saves a Mhd file of the images and labels from dataset
 LoadModel = False       # Pretrained model
 Background = False        # Background is considered as label
 Boxplot = True           # Boxplot created in every best fit
 AugmentedTrainingSet = Augment.A
 ############################ DATA PATHS ##############################################
-trainingSetPath = '..\\..\\Data\\LumbarSpine2D\\TrainingSet\\'
-outputPath = '..\\..\\Data\\LumbarSpine2D\\model\\'
-modelLocation = '..\\..\\Data\\LumbarSpine2D\\PretrainedModel\\'
+trainingSetPath = '../../Data/LumbarSpine2D/TrainingSet/'
+outputPath = '../../Data/LumbarSpine2D/model/'
+modelLocation = '../../Data/LumbarSpine2D/PretrainedModel/'
 
 if LoadModel:
     modelName = os.listdir(modelLocation)[0]
@@ -90,6 +78,7 @@ print(device)
 ###################### READ DATA AND PRE PROCESS IT FOR TRAINING DATA SETS #####################################################
 # Look for the folders or shortcuts:
 files = os.listdir(trainingSetPath)
+files = sorted(files)
 atlasNames = [] # Names of the atlases
 atlasImageFilenames = [] # Filenames of the intensity images
 atlasLabelsFilenames = [] # Filenames of the label images
@@ -103,14 +92,12 @@ subjects = []
 subjects.append(subject)
 for filename in files:
     name, extension = os.path.splitext(filename)
-    # Substract the tagInPhase:
-    atlasName = name
     # Check if filename is the in phase header and the labels exists:
     filenameImages = trainingSetPath + filename
-    filenameLabels = trainingSetPath + atlasName + tagLabels + '.' + extensionImages
+    filenameLabels = trainingSetPath + name + tagLabels + '.' + extensionImages
     if extension.endswith(extensionImages) and os.path.exists(filenameLabels):
         # Atlas name:
-        atlasNames.append(atlasName)
+        atlasNames.append(name)
         # Intensity image:
         atlasImageFilenames.append(filenameImages)
         # Labels image:
@@ -225,9 +212,7 @@ if Background:
 else:
     labelNames = ('Left Multifidus', 'Right Multifidus ', 'Left Quadratus ', 'Right Quadratus ', 'Left Psoas ','Right Psoas ')
     xLabel = ['LM', 'RM', 'LQ', 'RQ', 'LP', 'RP']
-    pos_weights = rel_weights(labelsTrainingSet, multilabelNum,Background)
-    pos_weights = pos_weights.to(device)
-    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights)
+    criterion = nn.BCEWithLogitsLoss()
 
 unet = Unet(1, multilabelNum)
 optimizer = optim.Adam(unet.parameters(), lr=0.0001)
@@ -235,16 +220,11 @@ optimizer = optim.Adam(unet.parameters(), lr=0.0001)
 if LoadModel:
     unet.load_state_dict(torch.load(unetFilename, map_location=device))
 
-inp = torch.rand(1, 1, dataSetImageSize_voxels[0], dataSetImageSize_voxels[1])
-out = unet(inp)
-
-##
-print('Test Unet Input/Output sizes:\n Input size: {0}.\n Output shape: {1}'.format(inp.shape, out.shape))
 #tensorGroundTruth.shape
 ##################################### U-NET TRAINING ############################################
 # Number of  batches:
-batchSize = 3
-devBatchSize = 3
+batchSize = 8
+devBatchSize = 1
 numBatches = np.ceil(trainingSet['input'].shape[0]/batchSize).astype(int)
 devNumBatches = np.ceil(devSet['input'].shape[0]/devBatchSize).astype(int)
 # Show results every printStep batches:
@@ -258,10 +238,10 @@ if plotStep_epochs != math.inf:
 inputsDevSet = torch.from_numpy(devSet['input'])
 gtDevSet = torch.from_numpy(devSet['output'])
 # Train
-best_vloss = 1
+best_diceScore = 0
 
-skip_plot = 10        # early epoch loss values tend to hide later values
-skip_model = 10            # avoids saving dataset images for the early epochs
+skip_plot = 15       # early epoch loss values tend to hide later values
+skip_model = 15            # avoids saving dataset images for the early epochs
 
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
@@ -281,10 +261,14 @@ diceValidEpoch = [[] for n in range(multilabelNum)]
 iter = 0
 deviter = 0
 
+inp = torch.rand(1, 1, dataSetImageSize_voxels[0], dataSetImageSize_voxels[1])
+out = unet(inp)
+
 
 torch.cuda.empty_cache()
 unet.to(device)
-for epoch in range(50):  # loop over the dataset multiple times
+
+for epoch in range(200):  # loop over the dataset multiple times
     epochNumbers.append(epoch)
     if saveMhd:
         outputTrainingSet = np.zeros(trainingSetShape)
@@ -306,6 +290,7 @@ for epoch in range(50):  # loop over the dataset multiple times
         # get the inputs
         inputs = torch.from_numpy(trainingSet['input'][i*batchSize:(i+1)*batchSize, :, :, :]).to(device)
         gt = torch.from_numpy(trainingSet['output'][i*batchSize:(i+1)*batchSize, :, :, :]).to(device)
+
         gt = F.one_hot(gt.to(torch.int64))
         gt = torch.squeeze(torch.transpose(gt, 1, 4), 4)
         gt = gt.float()
@@ -325,10 +310,9 @@ for epoch in range(50):  # loop over the dataset multiple times
             loss = criterion(outputs, gt)
             loss.backward()
             optimizer.step()
-
         # Save loss values:
-        lossValuesTrainingSet.append(loss.item())
-        lossValuesTrainingSetEpoch.append(loss.item())
+        lossValuesTrainingSet.append(float(loss.item()))
+        lossValuesTrainingSetEpoch.append(float(loss.item()))
         iterationNumbers.append(iter)
         #Print epoch iteration and loss value:
         print('[%d, %5d] loss: %.3f' % (epoch, i, loss.item()))
@@ -344,7 +328,7 @@ for epoch in range(50):  # loop over the dataset multiple times
             outputTrainingSet[i*batchSize:(i+1)*batchSize] = multilabel(segmentation, multilabelNum, Background)
             if DEBUG:
                 outputsNumpy = outputs.cpu().to(torch.float32).detach().numpy()
-                outputTrainingSetProbMaps[:, i * batchSize:(i + 1) * batchSize,:,:] = outputsNumpy.transpose((1,0,2,3))
+                outputTrainingSetProbMaps[:, i * batchSize:(i + 1) * batchSize, :, :] = outputsNumpy.transpose((1, 0, 2, 3))
 
         for k in range(label.shape[0]):
             for j in range(multilabelNum):
@@ -413,6 +397,7 @@ for epoch in range(50):  # loop over the dataset multiple times
     for j in range(multilabelNum):
         diceValidEpoch[j].append(np.mean(diceValid[j]))
         print('Valid Dice Score:  %f ' % np.mean(diceValid[j]))
+    meanDiceValue = np.mean(diceValid)       # Average Dice value from last Epoch
 
     avg_vloss = np.mean(lossValuesDevSetEpoch)
     lossValuesDevSetAllEpoch.append(avg_vloss)
@@ -449,10 +434,10 @@ for epoch in range(50):  # loop over the dataset multiple times
                 plt.legend()
             plt.savefig(outputPath + 'model_training_Dice_' + labelNames[k] + '.png')
             plt.close()
-
-    if (avg_vloss < best_vloss) and (epoch >= skip_model):
-        best_vloss = avg_vloss
-        print('[validation Epoch: %d] best_vloss: %.3f' % (epoch, best_vloss))
+    print("Mean dice Value: %.3f" % meanDiceValue)
+    if (meanDiceValue > best_diceScore) and (epoch >= skip_model):
+        best_diceScore = meanDiceValue
+        print('[validation Epoch: %d] best_diceScore: %.3f' % (epoch, meanDiceValue))
         modelPath = outputPath + 'unet_{}_{}_best_fit'.format(timestamp, epoch) + '.pt'
         torch.save(unet.state_dict(), modelPath)
         #boxplot:

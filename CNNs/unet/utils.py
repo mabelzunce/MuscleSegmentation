@@ -25,6 +25,14 @@ def swap_labels(img, label1=0, label2=1):
     return img
 
 
+def flip_image(image, axis, spacing):
+    image = sitk.GetArrayFromImage(image)
+    image = np.flip(image, axis)
+    image = sitk.GetImageFromArray(image)
+    image.SetSpacing(spacing)
+    return image
+
+
 def create_csv(vector, outpath):
     data = []
     for i in range(len(vector)):
@@ -68,6 +76,8 @@ def dice(reference, segmented):
     fn = (~segmented * reference) * 1
     fp = (~reference * segmented) * 1
     score = (2 * tp.sum())/(2 * tp.sum() + fn.sum() + fp.sum())
+    if tp.sum() == 0:
+        score = 0
     return score
 
 
@@ -80,6 +90,8 @@ def sensitivity(label, segmented):
     tp = (label * segmented) * 1
     fn = (~segmented * label) * 1
     score = tp.sum()/(tp.sum() + fn.sum())
+    if tp.sum() == 0:
+        score = 0
     return score
 
 
@@ -92,6 +104,8 @@ def precision(label, segmented):
     tp = (label * segmented) * 1
     fp = (segmented * ~label) * 1
     score = tp.sum()/(tp.sum() + fp.sum())
+    if tp.sum() == 0:
+        score = 0
     return score
 
 

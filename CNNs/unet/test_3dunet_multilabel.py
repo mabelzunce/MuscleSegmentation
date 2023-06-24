@@ -14,14 +14,12 @@ from utils import writeMhd
 from utils import multilabel
 from utils import filtered_multilabel
 from utils import boxplot
-from utils import rel_weights
 
+from unet_3d import Unet
 
-from unet_2d import Unet
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
 
 class Augment(enumerate):
     NA = 0  # No Augment
@@ -34,20 +32,21 @@ saveMhd = True        # Saves a mhd file for the output
 saveDataSetMhd = True  # Saves a Mhd file of the images and labels from dataset
 Background = False       # Background is considered as label
 Boxplot = True           # Boxplot created in every best fit
-AugmentedTrainingSet = Augment.A
-# Para correr la prueba corroborar que cantidad de filtros  establecidos  en "unet_2d" es igual a los del modelo
-
+AugmentedTrainingSet = Augment.NA
 ############################ DATA PATHS ##############################################
-trainingSetPath = '../../Data/LumbarSpine2D/TrainingSet/'
-outputPath = '../../Data/LumbarSpine2D/model/'
-modelLocation = '../../Data/LumbarSpine2D/PretrainedModel/'
-
+trainingSetPath = '../../Data/LumbarSpine3D/ResampledData/'
+outputPath = '../../Data/LumbarSpine3D/model/'
+modelLocation = '../../Data/LumbarSpine3D/PretrainedModel/'
 
 modelName = os.listdir(modelLocation)[0]
 unetFilename = modelLocation + modelName
 
 if not os.path.exists(outputPath):
     os.makedirs(outputPath)
+if not os.path.exists(trainingSetPath):
+    os.makedirs(trainingSetPath)
+if not os.path.exists(modelLocation):
+    os.makedirs(modelLocation)
 
 # Image format extension:
 extensionShortcuts = 'lnk'
@@ -62,7 +61,7 @@ tagLabels = '_labels'
 
 # Training/dev sets ratio, not using test set at the moment:
 trainingSetRelSize = 0.7
-devSetRelSize = 1-trainingSetRelSize
+devSetRelSize = 1 - trainingSetRelSize
 
 ######################### CHECK DEVICE ######################
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -79,18 +78,17 @@ atlasLabelsFilenames = [] # Filenames of the label images
 numImagesPerSubject = 0
 numRot = 0
 datasize = 0
-numSubjects = 1
+numSubjects = 0
 subject = files[0].split('_')[0]
 subjects = []
-subjects.append(subject)
 for filename in files:
     name, extension = os.path.splitext(filename)
     # Substract the tagInPhase:
-    atlasName = name
+    atlasName = name.split('_')[0]
     # Check if filename is the in phase header and the labels exists:
-    filenameImages = trainingSetPath + filename
+    filenameImages = trainingSetPath + atlasName + '.' + extensionImages
     filenameLabels = trainingSetPath + atlasName + tagLabels + '.' + extensionImages
-    if extension.endswith(extensionImages) and os.path.exists(filenameLabels):
+    if extension.endswith(extensionImages) and name.endswith(tagLabels):
         # Atlas name:
         atlasNames.append(atlasName)
         # Intensity image:
@@ -103,7 +101,7 @@ for filename in files:
         subjectAdd = filename.split('_')[1]
         if subject == subjectName:
             numImagesPerSubject += 1
-            if not (subjectName.startswith(subjectAdd[0])):
+            if not (subjectName.startswith(subjectAdd)):
                 numRot += 1
         if not (subjects.__contains__(subjectName)):
             numSubjects += 1
@@ -126,10 +124,10 @@ k = 0
 j = 0
 # Data set avoids mixing same subject images
 for i in range(0, datasize):
-    name1, name2 = atlasNames[i].split('_')[:2]
+    #name1, name2 = atlasNames[i].split('_')[:1]
     match AugmentedTrainingSet:
         case 0:
-            condition1 = (trainingSubjects.__contains__(name1)) and (name2 == name1)
+            condition1 = (trainingSubjects.__contains__(atlasNames[i]))
         case 1:
             condition1 = (trainingSubjects.__contains__(name1)) and (trainingSubjects.__contains__(name2))
         case 2:
@@ -138,13 +136,13 @@ for i in range(0, datasize):
         case 3:
             condition1 = (trainingSubjects.__contains__(name1)) and (not (validSubjects.__contains__(name2)))
 
-    condition2 = (validSubjects.__contains__(name1)) and (name2 == name1)
+    condition2 = (validSubjects.__contains__(atlasNames[i]))
 
     atlasImage = sitk.ReadImage(atlasImageFilenames[i])
-    atlasLabels = sitk.ReadImage(atlasLabelsFilenames[i])
+    atlasLabel = sitk.ReadImage(atlasLabelsFilenames[i])
 
-    trainingSetShape = [tNum, atlasImage.GetSize()[1], atlasImage.GetSize()[0]]
-    validSetShape = [vNum, atlasImage.GetSize()[1], atlasImage.GetSize()[0]]
+    trainingSetShape = [tNum, atlasImage.GetSize()[2], atlasImage.GetSize()[1], atlasImage.GetSize()[0]]
+    validSetShape = [vNum, atlasImage.GetSize()[2], atlasImage.GetSize()[1], atlasImage.GetSize()[0]]
 
     if i == 0:
         imagesTrainingSet = np.zeros(trainingSetShape)
@@ -152,22 +150,38 @@ for i in range(0, datasize):
         imagesValidSet = np.zeros(validSetShape)
         labelsValidSet = np.zeros(validSetShape)
         # Size of each 2d image:
-        dataSetImageSize_voxels = imagesTrainingSet.shape[1:3]  # obtiene el getsize[1 y 0]
+        dataSetImageSize_voxels = imagesTrainingSet.shape[1:4]  # obtiene el getsize[1 y 0]
 
     if condition1:
-        imagesTrainingSet[k, :, :] = np.reshape(sitk.GetArrayFromImage(atlasImage), [1, atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
-        labelsTrainingSet[k, :, :] = np.reshape(sitk.GetArrayFromImage(atlasLabels), [1, atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
+        imagesTrainingSet[k, :, :, :] = np.reshape(sitk.GetArrayFromImage(atlasImage),[1, atlasImage.GetSize()[2], atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
+        labelsTrainingSet[k, :, :, :] = np.reshape(sitk.GetArrayFromImage(atlasLabel), [1, atlasImage.GetSize()[2], atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
+        if i==0:
+            auximagesTrainingSet = sitk.GetArrayFromImage(atlasImage)
+            auxlabelsTrainingSet = sitk.GetArrayFromImage(atlasLabel)
+            flag = True
+        else:
+            auximagesTrainingSet = np.append(auximagesTrainingSet, sitk.GetArrayFromImage(atlasImage), axis=0)
+            auxlabelsTrainingSet = np.append(auxlabelsTrainingSet, sitk.GetArrayFromImage(atlasLabel), axis=0)
         k += 1
 
     if condition2:
-        imagesValidSet[j, :, :] = np.reshape(sitk.GetArrayFromImage(atlasImage), [1, atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
-        labelsValidSet[j, :, :] = np.reshape(sitk.GetArrayFromImage(atlasLabels), [1, atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
+        if flag:
+            auximagesValidSet = sitk.GetArrayFromImage(atlasImage)
+            auxlabelsValidSet = sitk.GetArrayFromImage(atlasLabel)
+            flag = False
+        else:
+            auximagesValidSet = np.append(auximagesValidSet, sitk.GetArrayFromImage(atlasImage), axis=0)
+            auxlabelsValidSet = np.append(auxlabelsValidSet, sitk.GetArrayFromImage(atlasLabel), axis=0)
+
+        imagesValidSet[j, :, :, :] = np.reshape(sitk.GetArrayFromImage(atlasImage), [1, atlasImage.GetSize()[2], atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
+        labelsValidSet[j, :, :, :] = np.reshape(sitk.GetArrayFromImage(atlasLabel), [1, atlasImage.GetSize()[2], atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
         j += 1
+
 if saveDataSetMhd:
-    writeMhd(imagesTrainingSet.astype(np.float32), outputPath + 'images_training_set.mhd')
-    writeMhd(labelsTrainingSet.astype(np.uint8), outputPath + 'labels_training_set.mhd')
-    writeMhd(imagesValidSet.astype(np.float32), outputPath + 'images_valid_set.mhd')
-    writeMhd(labelsValidSet.astype(np.uint8), outputPath + 'labels_valid_set.mhd')
+    writeMhd(auximagesTrainingSet, outputPath + 'TrainingImages.mhd')
+    writeMhd(auxlabelsTrainingSet, outputPath + 'TrainingLabels.mhd')
+    writeMhd(auximagesValidSet, outputPath + 'ValidImages.mhd')
+    writeMhd(auxlabelsValidSet, outputPath + 'ValidLabels.mhd')
 # Initialize numpy array and read data:
 print("Number of atlases images: {0}".format(len(atlasNames)))
 print("List of atlases: {0}\n".format(atlasNames))
@@ -193,26 +207,21 @@ labelsValidSet = labelsValidSet.astype(np.float32)
 trainingSet = dict([('input', imagesTrainingSet[:, :, :, :]), ('output', labelsTrainingSet[:, :, :, :])])
 devSet = dict([('input', imagesValidSet[:, :, :, :]), ('output', labelsValidSet[:,:,:,:])])
 print('Data set size. Training set: {0}. Dev set: {1}.'.format(trainingSet['input'].shape[0], devSet['input'].shape[0]))
-labelNames = ('Left Multifidus', 'Right Multifidus', 'Left Quadratus', 'Right Quadratus', 'Left Psoas', 'Right Psoas')
-if Background:
-    labelNames = ('Background', 'Left Multifidus', 'Right Multifidus', 'Left Quadratus', 'Right Quadratus', 'Left Psoas', 'Right Psoas')
+labelNames = ('Background', 'Left Psoas', 'Left Iliac', 'Left Quadratus', 'Left Multifidus', 'Right Psoas', 'Right Iliac', 'Right Quadratus', 'Right Multifidus')
 ####################### CREATE A U-NET MODEL #############################################
 # Create a UNET with one input and multiple output canal.
-multilabelNum = 6
+multilabelNum = 8
 if Background:
     multilabelNum += 1
-    xLabel = ['BG', 'LM', 'RM', 'LQ', 'RQ', 'LP', 'RP']
-    pos_weights = rel_weights(labelsTrainingSet, multilabelNum, Background)
-    pos_weights = pos_weights.to(device)
-    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights)
+    xLabel = ['BG', 'LP', 'LI', 'LQ', 'LM', 'RP', 'RI', 'RQ', 'RM']
+    criterion = nn.BCEWithLogitsLoss()
 else:
-    xLabel = ['LM', 'RM', 'LQ', 'RQ', 'LP', 'RP']
+    labelNames = labelNames[1:]
+    xLabel = ['LP', 'LI', 'LQ', 'LM', 'RP', 'RI', 'RQ', 'RM']
     criterion = nn.BCEWithLogitsLoss()
 
 unet = Unet(1, multilabelNum)
 unet.load_state_dict(torch.load(unetFilename, map_location=device))
-
-
 #tensorGroundTruth.shape
 ##################################### U-NET TRAINING ############################################
 # Number of  batches:
@@ -248,9 +257,6 @@ lossValuesDevSetAllEpoch = []
 
 torch.cuda.empty_cache()
 unet.to(device)
-if saveMhd:
-    outputTrainingSet = np.zeros(trainingSetShape)
-    outputValidSet = np.zeros(validSetShape)
 
 lossValuesTrainingSetEpoch = []
 lossValuesDevSetEpoch = []
@@ -273,11 +279,11 @@ specValid = [[] for n in range(multilabelNum)]
 specTrainingEpoch = [[] for n in range(multilabelNum)]
 specValidEpoch = [[] for n in range(multilabelNum)]
 
-precTrainingEpoch = [[] for n in range(multilabelNum)]
-precValidEpoch = [[] for n in range(multilabelNum)]
+#precTrainingEpoch = [[] for n in range(multilabelNum)]
+#precValidEpoch = [[] for n in range(multilabelNum)]
 
-precTraining = [[] for n in range(multilabelNum)]
-precValid = [[] for n in range(multilabelNum)]
+#precTraining = [[] for n in range(multilabelNum)]
+#precValid = [[] for n in range(multilabelNum)]
 
 #### TRAINING ####
 
@@ -288,7 +294,7 @@ for i in range(numBatches):
         inputs = torch.from_numpy(trainingSet['input'][i*batchSize:(i+1)*batchSize, :, :, :]).to(device)
         gt = torch.from_numpy(trainingSet['output'][i*batchSize:(i+1)*batchSize, :, :, :]).to(device)
         gt = F.one_hot(gt.to(torch.int64))
-        gt = torch.squeeze(torch.transpose(gt, 1, 4), 4)
+        gt = torch.squeeze(torch.transpose(gt, 1, 5), 5)
         gt = gt.float()
         if not Background:
             gt = gt[:, 1:, :, :]
@@ -308,20 +314,23 @@ for i in range(numBatches):
         segmentation = maxProb(segmentation.detach().numpy(), multilabelNum)
         segmentation = (segmentation > 0.5) * 1
         if saveMhd:
-            outputTrainingSet[i*batchSize:(i+1)*batchSize] = multilabel(segmentation, multilabelNum, Background)
+            if i==0:
+                outputTrainingSet = multilabel(segmentation, multilabelNum, Background)[0,:,:,:]
+            else:
+                outputTrainingSet = np.append(outputTrainingSet, multilabel(segmentation, multilabelNum, Background)[0,:,:,:], axis=0)
 
         for k in range(label.shape[0]):
             for j in range(multilabelNum):
-                lbl = label[k, j, :, :]
-                seg = segmentation[k, j, :, :]
+                lbl = label[k, j, :, :, :]
+                seg = segmentation[k, j, :, :, :]
                 diceScore = dice2d(lbl, seg)
                 specScore = specificity(lbl, seg)
                 sensScore = sensitivity(lbl, seg)
-                precScore = precision(lbl, seg)
+                #precScore = precision(lbl, seg)
                 diceTraining[j].append(diceScore)
                 specTraining[j].append(specScore)
                 sensTraining[j].append(sensScore)
-                precTraining[j].append(precScore)
+                #precTraining[j].append(precScore)
 
 for j in range(multilabelNum):
     diceTrainingEpoch[j].append(np.mean(diceTraining[j]))
@@ -339,8 +348,8 @@ for i in range(devNumBatches):
     with torch.no_grad():
         inputs = torch.from_numpy(devSet['input'][i * devBatchSize:(i + 1) * devBatchSize, :, :, :]).to(device)
         gt = torch.from_numpy(devSet['output'][i * devBatchSize:(i + 1) * devBatchSize, :, :, :]).to(device)
-        gt = F.one_hot(gt.to(torch.int64))
-        gt = torch.squeeze(torch.transpose(gt, 1, 4), 4)
+        gt = F.one_hot(gt.to(torch.int64), num_classes=multilabelNum + 1)
+        gt = torch.squeeze(torch.transpose(gt, 1, 5), 5)
         gt = gt.float()
         if not Background:
             gt = gt[:, 1:, :, :]
@@ -359,27 +368,29 @@ for i in range(devNumBatches):
     segmentation = maxProb(segmentation.detach().numpy(), multilabelNum)
     segmentation = (segmentation > 0.5) * 1
     if saveMhd:
-        outputValidSet[i * devBatchSize:(i + 1) * devBatchSize] = filtered_multilabel(segmentation, multilabelNum, Background)
+        if i == 0:
+            outputValidSet = multilabel(segmentation, multilabelNum, Background)[0,:,:,:]
+        else:
+            outputValidSet = np.append(outputValidSet, multilabel(segmentation, multilabelNum, Background)[0,:,:,:], axis=0)
 
     for k in range(label.shape[0]):
         for j in range(multilabelNum):
-            lbl = label[k, j, :, :]
-            #lbl = labelfilter(lbl)
-            seg = segmentation[k, j, :, :]
+            lbl = label[k, j, :, :, :]
+            seg = segmentation[k, j, :, :, :]
             diceScore = dice2d(lbl, seg)
             specScore = specificity(lbl, seg)
             sensScore = sensitivity(lbl, seg)
-            precScore = precision(lbl, seg)
+            #precScore = precision(lbl, seg)
             diceValid[j].append(diceScore)
             specValid[j].append(specScore)
             sensValid[j].append(sensScore)
-            precValid[j].append(precScore)
+            #precValid[j].append(precScore)
 
 for j in range(multilabelNum):
     diceValidEpoch[j].append(np.mean(diceValid[j]))
     specValidEpoch[j].append(np.mean(specValid[j]))
     sensValidEpoch[j].append(np.mean(sensValid[j]))
-    precValidEpoch[j].append(np.mean(precValid[j]))
+    #precValidEpoch[j].append(np.mean(precValid[j]))
     print('Valid Dice Score:  %f ' % np.mean(diceValid[j]))
 
 avg_vloss = np.mean(lossValuesDevSetEpoch)
@@ -390,7 +401,7 @@ for k in range(multilabelNum):
     create_csv(diceValidEpoch[k], outputPath + 'Test_ValidDice_' + labelNames[k] + '.csv')
     create_csv(sensValidEpoch[k], outputPath + 'Test_ValidSensitivity_' + labelNames[k] + '.csv')
     create_csv(specValidEpoch[k], outputPath + 'Test_ValidSpecificity_' + labelNames[k] + '.csv')
-    create_csv(precValidEpoch[k], outputPath + 'Test_ValidPrecision_' + labelNames[k] + '.csv')
+    #create_csv(precValidEpoch[k], outputPath + 'Test_ValidPrecision_' + labelNames[k] + '.csv')
 
 
 
@@ -412,8 +423,8 @@ if Boxplot:
             outpath=(outputPath + 'Test_trainingSpecificityBoxplot.png'), yscale=[0, 1], title='Training Specificity Scores')
     boxplot(specValid[:], xlabel=xLabel[:],
             outpath=(outputPath + 'Test_validSpecificityBoxplot.png'), yscale=[0, 1], title='Valid Specificity Scores')
-    boxplot(precValid, xlabel=xLabel,
-            outpath=(outputPath + 'Test_validPrecisionBoxplot.png'), yscale=[0.7, 1], title='Valid Precision Scores')
+    #boxplot(precValid, xlabel=xLabel,
+    #        outpath=(outputPath + 'Test_validPrecisionBoxplot.png'), yscale=[0.7, 1], title='Valid Precision Scores')
     for k in range(multilabelNum):
         boxplot(data=(diceTraining[k], diceValid[k]),
                 xlabel=['Training Set', 'Valid Set'], outpath=(outputPath + labelNames[k] + '_boxplot.png'),
