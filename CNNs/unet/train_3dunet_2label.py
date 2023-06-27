@@ -125,7 +125,7 @@ for i in range(0, datasize):
     name1, name2 = atlasNames[i].split('_')[:2]
     match AugmentedTrainingSet:
         case 0:
-            condition1 = (trainingSubjects.__contains__(name1)) and (name2 == name1)
+            condition1 = (trainingSubjects.__contains__(name1))
         case 1:
             condition1 = (trainingSubjects.__contains__(name1)) and (trainingSubjects.__contains__(name2))
         case 2:
@@ -189,10 +189,17 @@ labelsValidSet = labelsValidSet.astype(np.float32)
 trainingSet = dict([('input', imagesTrainingSet[:, :, :, :]), ('output', labelsTrainingSet[:, :, :, :])])
 devSet = dict([('input', imagesValidSet[:, :, :, :]), ('output', labelsValidSet[:,:,:,:])])
 print('Data set size. Training set: {0}. Dev set: {1}.'.format(trainingSet['input'].shape[0], devSet['input'].shape[0]))
-labelNames = ('Background', 'Left Psoas', 'Left Iliac', 'Left Quadratus', 'Left Multifidus', 'Right Psoas', 'Right Iliac', 'Right Quadratus', 'Right Multifidus')
+labelNames = dict([('Background',0), ('Left Psoas',1), ('Left Iliac',2), ('Left Quadratus',3), ('Left Multifidus',4), ('Right Psoas',5), ('Right Iliac',6),
+                    ('Right Quadratus',7), ('Right Multifidus',8)])
+print(labelNames['Right Quadratus'])
+label1Index = labelNames['Left Psoas']
+label2Index = labelNames['Right Psoas']
+
+trainingSet['output'] = (((trainingSet['output'] == label1Index) * 1) + (trainingSet['output'] == label2Index) * 2)
+devSet['output'] = (((devSet['output'] == label1Index) * 1) + (devSet['output'] == label2Index) * 2)
 ####################### CREATE A U-NET MODEL #############################################
 # Create a UNET with one input and multiple output canal.
-multilabelNum = 8
+multilabelNum = 2
 if Background:
     multilabelNum += 1
     xLabel = ['BG', 'LP', 'LI', 'LQ', 'LM', 'RP', 'RI', 'RQ', 'RM']
@@ -338,7 +345,7 @@ for epoch in range(200):  # loop over the dataset multiple times
     for k in range(multilabelNum):
         create_csv(diceTrainingEpoch[k], outputPath + 'TrainingDice_' + labelNames[k] + '.csv')
     create_csv(lossValuesTrainingSetAllEpoch, outputPath + 'TestLossEpoch.csv')
-    #print(f"Maximum cached memory: {cached_memory:.2f} MB")
+
 
 
 
