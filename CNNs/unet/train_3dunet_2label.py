@@ -31,7 +31,7 @@ saveDataSetMhd = False  # Saves a Mhd file of the images and labels from dataset
 LoadModel = False      # Pretrained model
 Background = False        # Background is considered as label
 Boxplot = True           # Boxplot created in every best fit
-AugmentedTrainingSet = Augment.L
+AugmentedTrainingSet = Augment.NA
 ############################ DATA PATHS ##############################################
 trainingSetPath = '../../Data/LumbarSpine3D/TrainingSetAugmentedLinear/'
 outputPath = '../../Data/LumbarSpine3D/model/'
@@ -125,7 +125,7 @@ for i in range(0, datasize):
     name1, name2 = atlasNames[i].split('_')[:2]
     match AugmentedTrainingSet:
         case 0:
-            condition1 = (trainingSubjects.__contains__(name1))
+            condition1 = (trainingSubjects.__contains__(name1)) and (name2 == name1)
         case 1:
             condition1 = (trainingSubjects.__contains__(name1)) and (trainingSubjects.__contains__(name2))
         case 2:
@@ -205,8 +205,8 @@ if Background:
     xLabel = ['BG', 'LP', 'LI', 'LQ', 'LM', 'RP', 'RI', 'RQ', 'RM']
     criterion = nn.BCEWithLogitsLoss()
 else:
-    labelNames = labelNames[1:]
-    xLabel = ['LP', 'LI', 'LQ', 'LM', 'RP', 'RI', 'RQ', 'RM']
+    #labelNames = labelNames[1:]
+    xLabel = ['LP', 'RP']
     criterion = nn.BCEWithLogitsLoss()
 
 unet = Unet(1, multilabelNum)
@@ -330,6 +330,7 @@ for epoch in range(200):  # loop over the dataset multiple times
         for k in range(label.shape[0]):
             for j in range(multilabelNum):
                 lbl = label[k, j, :, :, :]
+                writeMhd(sitk.GetImageFromArray(lbl),outputPath + 'prueba.mhd')
                 seg = segmentation[k, j, :, :, :]
                 diceScore = dice2d(lbl, seg)
                 diceTraining[j].append(diceScore)
