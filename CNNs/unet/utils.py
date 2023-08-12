@@ -136,9 +136,9 @@ def multilabel(image, numlabels, Background):
     outImage = np.zeros(shape)
     for k in range(numlabels):
         if Background:
-            outImage = outImage + image[:, k, :, :] * k
+            outImage = outImage + image[:, k, :, :, :] * k
         else:
-            outImage = outImage + image[:, k, :, :] * (k + 1)
+            outImage = outImage + image[:, k, :, :, :] * (k + 1)
     return outImage
 
 
@@ -174,9 +174,12 @@ def filtered_multilabel(image, numlabels, Background): #usar cuando se segmentan
     return outImage
 
 
-def writeMhd(image, outpath):
+def writeMhd(image, outpath, ref=0):
     img = sitk.GetImageFromArray(image)
+    if ref != 0:
+        img.CopyInformation(ref)
     sitk.WriteImage(img, outpath)
+
 
 
 def pn_weights(trainingset, numlabels, background):         # positive to negative ratio

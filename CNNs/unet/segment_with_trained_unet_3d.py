@@ -8,11 +8,14 @@ from utils import multilabel
 from utils import maxProb
 
 ############################ DATA PATHS ##############################################
-dataPath = '../../Data/LumbarSpine3D/InputImages/'
+dataPath = '../../Data/LumbarSpine3D/ResampledDataAux/' #modificar lel nombre de la carpeta para que quede lindo
 outputPath = '../../Data/LumbarSpine3D/model/'
 modelLocation = '../../Data/LumbarSpine3D/PretrainedModel/'
 # Image format extension:
 extensionImages = 'mhd'
+
+if not os.path.exists(dataPath):
+    os.makedirs(dataPath)
 
 modelName = os.listdir(modelLocation)[0]
 modelFilename = modelLocation + modelName
@@ -46,16 +49,16 @@ for filename in files:
     if extension.endswith('raw'):
         continue
     filenameImage = dataPath + filename
-    image = sitk.ReadImage(filenameImage)
-    image = sitk.GetArrayFromImage(image).astype(np.float32)
-    image = np.expand_dims(image, axis=1)
+    sitkImage = sitk.ReadImage(filenameImage)
+    image = sitk.GetArrayFromImage(sitkImage).astype(np.float32)
+    image = np.expand_dims(image, axis=0)
 
     with torch.no_grad():
         input = torch.from_numpy(image).to(device)
         output = model(input.unsqueeze(0))
         output = torch.sigmoid(output.cpu().to(torch.float32))
-        #outputs = maxProb(output.detach.numpy(), multilabelNum)
-        output = (output > 0.5) * 1
-        output = multilabel(output, multilabelNum, False)
-    writeMhd(output.astype(np.uint8), outputPath + name + 'segmentation' + extension)
+        outputs = maxProb(output, multilabelNum)
+        output = ((output > 0.5) * 1)
+        output = multilabel(output.detach().numpy(), multilabelNum, False)
+    writeMhd(output.squeeze(0).astype(np.uint8), outputPath + name + '_segmentation' + extension, sitkImage)
 
