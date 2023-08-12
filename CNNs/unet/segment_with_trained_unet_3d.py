@@ -8,8 +8,8 @@ from utils import multilabel
 from utils import maxProb
 
 ############################ DATA PATHS ##############################################
-dataPath = '../../Data/LumbarSpine3D/ResampledDataAux/' #modificar lel nombre de la carpeta para que quede lindo
-outputPath = '../../Data/LumbarSpine3D/model/'
+dataPath = '../../Data/LumbarSpine3D/ResampledImages/' #modificar lel nombre de la carpeta para que quede lindo
+outputPath = '../../Data/LumbarSpine3D/ResampledImages/'
 modelLocation = '../../Data/LumbarSpine3D/PretrainedModel/'
 # Image format extension:
 extensionImages = 'mhd'
@@ -59,6 +59,6 @@ for filename in files:
         output = torch.sigmoid(output.cpu().to(torch.float32))
         outputs = maxProb(output, multilabelNum)
         output = ((output > 0.5) * 1)
-        output = multilabel(output.detach().numpy(), multilabelNum, False)
+        output = multilabel(output.detach().numpy())
     writeMhd(output.squeeze(0).astype(np.uint8), outputPath + name + '_segmentation' + extension, sitkImage)
 
