@@ -6,10 +6,11 @@ import torch
 from utils import writeMhd
 from utils import multilabel
 from utils import maxProb
+from utils import FilterUnconnectedRegions
 
 ############################ DATA PATHS ##############################################
-dataPath = '../../Data/LumbarSpine3D/ResampledImages/' #modificar lel nombre de la carpeta para que quede lindo
-outputPath = '../../Data/LumbarSpine3D/ResampledImages/'
+dataPath = '../../Data/LumbarSpine3D/InputImages/'
+outputPath = '../../Data/LumbarSpine3D/OutputSegmentations/'
 modelLocation = '../../Data/LumbarSpine3D/PretrainedModel/'
 # Image format extension:
 extensionImages = 'mhd'
@@ -60,5 +61,6 @@ for filename in files:
         outputs = maxProb(output, multilabelNum)
         output = ((output > 0.5) * 1)
         output = multilabel(output.detach().numpy())
-    writeMhd(output.squeeze(0).astype(np.uint8), outputPath + name + '_segmentation' + extension, sitkImage)
-
+    output = FilterUnconnectedRegions(output.squeeze(0), multilabelNum, sitkImage)# Herramienta de filtrado de imagenes
+    sitk.WriteImage(output, outputPath + name + '_segmentationF' + extension)
+    #writeMhd(output.squeeze(0).astype(np.uint8), outputPath + name + '_segmentation' + extension, sitkImage) # sin herramienta de filtrado

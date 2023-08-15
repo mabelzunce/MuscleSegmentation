@@ -129,12 +129,13 @@ def maxProb(image, numlabels):
     return outImage
 
 
-def multilabel(image, numlabels, Background):
+def multilabel(image,Background = False):
+    numLabels = image.shape[1]
     shape = image.shape
     shape = list(shape)
-    shape.remove(numlabels)
+    shape.remove(numLabels)
     outImage = np.zeros(shape)
-    for k in range(numlabels):
+    for k in range(numLabels):
         if Background:
             outImage = outImage + image[:, k, :, :, :] * k
         else:
@@ -159,13 +160,43 @@ def labelfilter(image):
     filteredimage = sitk.GetArrayFromImage(sitk.Not(filtered_image))
     return filteredimage
 
+def FilterUnconnectedRegions(image, numLabels, ref , radiusErodeDilate=1):
+    segmentedImage = sitk.GetImageFromArray(image)
+    segmentedImage.CopyInformation(ref)
+    # Output image:
+    outSegmentedImage = sitk.Image(segmentedImage.GetSize(), sitk.sitkUInt8)
+    outSegmentedImage.CopyInformation(ref)
+    # Go through each label:
+    relabelFilter = sitk.RelabelComponentImageFilter() # I use the relabel filter to get largest region for each label.
+    relabelFilter.SortByObjectSizeOn()
+    maskFilter = sitk.MaskImageFilter()
+    maskFilter.SetMaskingValue(1)
+    for i in range(0, numLabels):
+        maskThisLabel = segmentedImage == (i+1)
+        # Erode the mask:
+        maskThisLabel = sitk.BinaryErode(maskThisLabel, radiusErodeDilate)
+        # Now resegment to get labels for each segmented object:
+        maskThisLabel = sitk.ConnectedComponent(maskThisLabel)
+        # Relabel by object size:
+        maskThisLabel = relabelFilter.Execute(maskThisLabel)
+        # get the largest object:
+        maskThisLabel = (maskThisLabel==1)
+        # dilate the mask:
+        maskThisLabel = sitk.BinaryDilate(maskThisLabel, radiusErodeDilate)
+        # Assign to the output:
+        maskFilter.SetOutsideValue(i+1)
+        outSegmentedImage = maskFilter.Execute(outSegmentedImage, maskThisLabel)
 
-def filtered_multilabel(image, numlabels, Background): #usar cuando se segmentan imagenes nuevas
+    return outSegmentedImage
+
+
+def filtered_multilabel(image, Background = False): #usar cuando se segmentan imagenes nuevas
+    numLabels = image.shape[1]
     shape = image.shape
     shape = list(shape)
-    shape.remove(numlabels)
+    shape.remove(numLabels)
     outImage = np.zeros(shape)
-    for k in range(numlabels):
+    for k in range(numLabels):
         filteredImage = labelfilter(image[:, k, :, :])
         if Background:
             outImage = outImage + filteredImage * k
