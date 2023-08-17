@@ -160,7 +160,7 @@ def labelfilter(image):
     filteredimage = sitk.GetArrayFromImage(sitk.Not(filtered_image))
     return filteredimage
 
-def FilterUnconnectedRegions(image, numLabels, ref , radiusErodeDilate=1):
+def FilterUnconnectedRegions(image, numLabels, ref , radiusErodeDilate=0):
     segmentedImage = sitk.GetImageFromArray(image)
     segmentedImage.CopyInformation(ref)
     # Output image:
