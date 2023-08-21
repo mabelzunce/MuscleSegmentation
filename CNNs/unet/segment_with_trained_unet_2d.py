@@ -83,7 +83,7 @@ with torch.no_grad():
         outputs = model(inputs.unsqueeze(0))
         outputs = torch.sigmoid(outputs.cpu().to(torch.float32))
         outputs = (outputs > 0.5) * 1
-        outputSegmentation[i] = filtered_multilabel(outputs.detach().numpy(), multilabelNum, False)
+        outputSegmentation[i] = filtered_multilabel(outputs.detach().numpy())
 
 writeMhd(outputSegmentation.astype(np.float32), outputPath + 'segmentedImages.mhd')
 

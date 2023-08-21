@@ -31,7 +31,7 @@ saveDataSetMhd = False  # Saves a Mhd file of the images and labels from dataset
 LoadModel = False      # Pretrained model
 Background = False        # Background is considered as label
 Boxplot = True           # Boxplot created in every best fit
-AugmentedTrainingSet = Augment.L
+AugmentedTrainingSet = Augment.NA
 ############################ DATA PATHS ##############################################
 trainingSetPath = '../../Data/LumbarSpine3D/TrainingSetAugmentedLinear/'
 outputPath = '../../Data/LumbarSpine3D/model/'
@@ -189,17 +189,24 @@ labelsValidSet = labelsValidSet.astype(np.float32)
 trainingSet = dict([('input', imagesTrainingSet[:, :, :, :]), ('output', labelsTrainingSet[:, :, :, :])])
 devSet = dict([('input', imagesValidSet[:, :, :, :]), ('output', labelsValidSet[:,:,:,:])])
 print('Data set size. Training set: {0}. Dev set: {1}.'.format(trainingSet['input'].shape[0], devSet['input'].shape[0]))
-labelNames = ('Background', 'Left Psoas', 'Left Iliac', 'Left Quadratus', 'Left Multifidus', 'Right Psoas', 'Right Iliac', 'Right Quadratus', 'Right Multifidus')
+labelNames = dict([('Background',0), ('Left Psoas',1), ('Left Iliac',2), ('Left Quadratus',3), ('Left Multifidus',4), ('Right Psoas',5), ('Right Iliac',6),
+                    ('Right Quadratus',7), ('Right Multifidus',8)])
+print(labelNames['Right Quadratus'])
+label1Index = labelNames['Left Psoas']
+label2Index = labelNames['Right Psoas']
+
+trainingSet['output'] = (((trainingSet['output'] == label1Index) * 1) + (trainingSet['output'] == label2Index) * 2)
+devSet['output'] = (((devSet['output'] == label1Index) * 1) + (devSet['output'] == label2Index) * 2)
 ####################### CREATE A U-NET MODEL #############################################
 # Create a UNET with one input and multiple output canal.
-multilabelNum = 8
+multilabelNum = 2
 if Background:
     multilabelNum += 1
     xLabel = ['BG', 'LP', 'LI', 'LQ', 'LM', 'RP', 'RI', 'RQ', 'RM']
     criterion = nn.BCEWithLogitsLoss()
 else:
-    labelNames = labelNames[1:]
-    xLabel = ['LP', 'LI', 'LQ', 'LM', 'RP', 'RI', 'RQ', 'RM']
+    #labelNames = labelNames[1:]
+    xLabel = ['LP', 'RP']
     criterion = nn.BCEWithLogitsLoss()
 
 unet = Unet(1, multilabelNum)
@@ -323,6 +330,7 @@ for epoch in range(200):  # loop over the dataset multiple times
         for k in range(label.shape[0]):
             for j in range(multilabelNum):
                 lbl = label[k, j, :, :, :]
+                writeMhd(sitk.GetImageFromArray(lbl),outputPath + 'prueba.mhd')
                 seg = segmentation[k, j, :, :, :]
                 diceScore = dice2d(lbl, seg)
                 diceTraining[j].append(diceScore)
@@ -338,7 +346,7 @@ for epoch in range(200):  # loop over the dataset multiple times
     for k in range(multilabelNum):
         create_csv(diceTrainingEpoch[k], outputPath + 'TrainingDice_' + labelNames[k] + '.csv')
     create_csv(lossValuesTrainingSetAllEpoch, outputPath + 'TestLossEpoch.csv')
-    #print(f"Maximum cached memory: {cached_memory:.2f} MB")
+
 
 
 

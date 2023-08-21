@@ -279,12 +279,6 @@ specValid = [[] for n in range(multilabelNum)]
 specTrainingEpoch = [[] for n in range(multilabelNum)]
 specValidEpoch = [[] for n in range(multilabelNum)]
 
-#precTrainingEpoch = [[] for n in range(multilabelNum)]
-#precValidEpoch = [[] for n in range(multilabelNum)]
-
-#precTraining = [[] for n in range(multilabelNum)]
-#precValid = [[] for n in range(multilabelNum)]
-
 #### TRAINING ####
 
 unet.train(False)
@@ -315,9 +309,9 @@ for i in range(numBatches):
         segmentation = (segmentation > 0.5) * 1
         if saveMhd:
             if i==0:
-                outputTrainingSet = multilabel(segmentation, multilabelNum, Background)[0,:,:,:]
+                outputTrainingSet = multilabel(segmentation, multilabelNum, Background)
             else:
-                outputTrainingSet = np.append(outputTrainingSet, multilabel(segmentation, multilabelNum, Background)[0,:,:,:], axis=0)
+                outputTrainingSet = np.append(outputTrainingSet, multilabel(segmentation, multilabelNum, Background), axis=0)
 
         for k in range(label.shape[0]):
             for j in range(multilabelNum):
@@ -338,7 +332,7 @@ for j in range(multilabelNum):
 
 
 for k in range(multilabelNum):
-    create_csv(diceTrainingEpoch[k], outputPath + 'TrainingDice_' + labelNames[k] + '.csv')
+    create_csv(diceTraining[k], outputPath + 'TrainingDice_' + labelNames[k] + '.csv')
 
 
 
@@ -369,9 +363,9 @@ for i in range(devNumBatches):
     segmentation = (segmentation > 0.5) * 1
     if saveMhd:
         if i == 0:
-            outputValidSet = multilabel(segmentation, multilabelNum, Background)[0,:,:,:]
+            outputValidSet = multilabel(segmentation, multilabelNum, Background)
         else:
-            outputValidSet = np.append(outputValidSet, multilabel(segmentation, multilabelNum, Background)[0,:,:,:], axis=0)
+            outputValidSet = np.append(outputValidSet, multilabel(segmentation, multilabelNum, Background), axis=0)
 
     for k in range(label.shape[0]):
         for j in range(multilabelNum):
@@ -398,7 +392,7 @@ lossValuesDevSetAllEpoch.append(avg_vloss)
 print('avg_vloss: %f' % avg_vloss)
 
 for k in range(multilabelNum):
-    create_csv(diceValidEpoch[k], outputPath + 'Test_ValidDice_' + labelNames[k] + '.csv')
+    create_csv(diceValid[k], outputPath + 'Test_ValidDice_' + labelNames[k] + '.csv')
     create_csv(sensValidEpoch[k], outputPath + 'Test_ValidSensitivity_' + labelNames[k] + '.csv')
     create_csv(specValidEpoch[k], outputPath + 'Test_ValidSpecificity_' + labelNames[k] + '.csv')
     #create_csv(precValidEpoch[k], outputPath + 'Test_ValidPrecision_' + labelNames[k] + '.csv')
@@ -412,7 +406,7 @@ if Boxplot:
     boxplot(diceTraining, xlabel=xLabel,
             outpath=(outputPath + 'Test_trainingBoxplot_shortScale.png'), yscale=[0.7, 1.0], title='Training Dice Scores')
     boxplot(diceValid[:], xlabel=xLabel[:],
-            outpath=(outputPath + 'Test_validBoxplot.png'), yscale=[0, 1], title='Validation Dice Scores')
+            outpath=(outputPath + 'Test_validBoxplot.png'), yscale=[0.3, 1], title='Validation Dice Scores')
     boxplot(diceValid, xlabel=xLabel,
             outpath=(outputPath + 'Test_validBoxplot_shortScale.png'), yscale=[0.7, 1.0], title='Validation Dice Scores')
     boxplot(sensTraining[:], xlabel=xLabel[:],
