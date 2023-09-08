@@ -10,7 +10,7 @@ from utils import FilterUnconnectedRegions
 
 ############################ DATA PATHS ##############################################
 dataPath = '../../Data/LumbarSpine3D/InputImages/'
-outputPath = '../../Data/LumbarSpine3D/OutputSegmentations/'
+outputPath = '../../Data/LumbarSpine3D/InputImages/'
 modelLocation = '../../Data/LumbarSpine3D/PretrainedModel/'
 # Image format extension:
 extensionImages = 'mhd'
@@ -62,5 +62,5 @@ for filename in files:
         output = ((output > 0.5) * 1)
         output = multilabel(output.detach().numpy())
     output = FilterUnconnectedRegions(output.squeeze(0), multilabelNum, sitkImage)# Herramienta de filtrado de imagenes
-    sitk.WriteImage(output, outputPath + name + '_segmentationF' + extension)
+    sitk.WriteImage(output, outputPath + name + '_segmentation' + extension)
     #writeMhd(output.squeeze(0).astype(np.uint8), outputPath + name + '_segmentation' + extension, sitkImage) # sin herramienta de filtrado

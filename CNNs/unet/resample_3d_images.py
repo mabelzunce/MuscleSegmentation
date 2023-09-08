@@ -20,7 +20,7 @@ paramFileAffine = 'Parameters_Affine_' + similarityMetricForReg
 ############################### IMAGES AVAILABLE ###################################
 
 dataPath = '../../Data/LumbarSpine3D/InputImages/'# Base data path.
-outputPath = '../../Data/LumbarSpine3D/ResampledImages/' # Base data path.
+outputPath = '../../Data/LumbarSpine3D/InputImages/' # Base data path.
 if not os.path.exists(outputPath):
     os.makedirs(outputPath)
 # Get the atlases names and files:
@@ -31,27 +31,30 @@ data = sorted(data)
 extensionShortcuts = 'lnk'
 strForShortcut = '-> '
 extensionImages = 'mhd'
-tagInPhase = '_I'
+tagInPhase = '_F'
 
 atlasNames = [] # Names of the atlases
 atlasImageFilenames = [] # Filenames of the intensity images
 
 folderIndex = []
-
+tagArray = []
 
 for filename in data:
     name, extension = os.path.splitext(filename)
+
     # Substract the tagInPhase:
     atlasName = name.split('_')[0]
 
-    filenameImages = dataPath + atlasName + tagInPhase + '.' + extensionImages
+    filenameImages = dataPath + name + '.' + extensionImages
 
-    if name.endswith(tagInPhase) and extension.endswith(extensionImages):
+    if extension.endswith(extensionImages):
         #\ and (atlasName not in atlasNamesImplantOrNotGood):
         # Atlas name:
         atlasNames.append(atlasName)
         # Intensity image:
         atlasImageFilenames.append(filenameImages)
+        #tag
+        tagArray.append(name[-1])
 
 
 print("Number of atlases images: {0}".format(len(atlasNames)))
@@ -84,11 +87,13 @@ for i in range(0, len(atlasNames)):
     resampler.SetSize(new_size)
     resampler.SetOutputSpacing(new_spacing)
     resampler.SetOutputOrigin(origin)
-    resampled_image = resampler.Execute(atlasImage)
     resampler.SetInterpolator(sitk.sitkNearestNeighbor)
+    resampled_image = resampler.Execute(atlasImage)
+
 
     # write the 3d images:
-    sitk.WriteImage(resampled_image, outputPath + atlasNames[i] + '.' + extensionImages)
+    resampled_image = sitk.Cast(resampled_image, sitk.sitkUInt8)
+    sitk.WriteImage(resampled_image, outputPath + atlasNames[i] + '' + extensionImages)
 
     # Show images:
     if DEBUG:
