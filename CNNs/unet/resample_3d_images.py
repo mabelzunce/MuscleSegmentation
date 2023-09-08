@@ -31,7 +31,7 @@ data = sorted(data)
 extensionShortcuts = 'lnk'
 strForShortcut = '-> '
 extensionImages = 'mhd'
-tagInPhase = '_F'
+tagInPhase = '_FF'
 
 atlasNames = [] # Names of the atlases
 atlasImageFilenames = [] # Filenames of the intensity images
@@ -92,8 +92,8 @@ for i in range(0, len(atlasNames)):
 
 
     # write the 3d images:
-    resampled_image = sitk.Cast(resampled_image, sitk.sitkUInt8)
-    sitk.WriteImage(resampled_image, outputPath + atlasNames[i] + '' + extensionImages)
+    resampled_image = sitk.Cast(resampled_image, sitk.sitkFloat32)
+    sitk.WriteImage(resampled_image, outputPath + atlasNames[i] + '_ff.' + extensionImages)
 
     # Show images:
     if DEBUG:

@@ -5,17 +5,18 @@ import os
 
 
 dataPath ='../../Data/LumbarSpine3D/InputImages/'
-outputPath ='../../Data/LumbarSpine3D/InputImages/'
+outputPath ='../../Data/LumbarSpine3D/'
 
-muscleNames = ['LP','LI','LQ','LM','RP','RI','RQ','RM','Avg']
+muscleNames = ['Left Psoas','Left Iliacus','Left Quadratus','Left Multifidus','Right Psoas','Right Iliacus','Right Quadratus','Right Multifidus','Avg']
 folder  = os.listdir(dataPath)
 folder = sorted(folder)
-tagFatFraction = '_f.mhd'
-tagMask = '_segmentation.mhd'
+tagFatFraction = '_ff.mhd'
+tagMask = '_seg.mhd'
 auxName = str
 
 with open(outputPath + 'fatfraction.csv',mode='w', newline="") as csv_file:
     csv_writer = csv.writer(csv_file)
+    header = list(('subject' , *muscleNames))
     for files in folder:
         name = os.path.splitext(files)[0]
         if name.split('_')[0] != auxName:
@@ -34,4 +35,4 @@ with open(outputPath + 'fatfraction.csv',mode='w', newline="") as csv_file:
             fatFraction.append(ffSum/maskSize)
         csvRow = (auxName, *fatFraction, np.mean(fatFraction))
         csvRow = list(csvRow)
-        csv_writer.writerow(csvRow)
+        csv_writer.writerows([header, csvRow])
