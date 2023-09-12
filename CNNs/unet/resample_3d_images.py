@@ -19,38 +19,42 @@ paramFileRigid = 'Parameters_Rigid_' + similarityMetricForReg
 paramFileAffine = 'Parameters_Affine_' + similarityMetricForReg
 ############################### IMAGES AVAILABLE ###################################
 
-dataPath = 'D:/1LumbarSpineDixonData/ForLibrary/'# Base data path.
-outPath = 'D:/1LumbarSpineDixonData/ForLibrary/resampled/'
+dataPath = '../../Data/LumbarSpine3D/InputImages/'# Base data path.
+outputPath = '../../Data/LumbarSpine3D/InputImages/' # Base data path.
+if not os.path.exists(outputPath):
+    os.makedirs(outputPath)
 # Get the atlases names and files:
 # Look for the folders or shortcuts:
-data = os.listdir(outPath)
+data = os.listdir(dataPath)
 data = sorted(data)
 # Image format extension:
 extensionShortcuts = 'lnk'
 strForShortcut = '-> '
 extensionImages = 'mhd'
-tagInPhase = '_seg'
-tagLabels = '_labels'
+tagInPhase = '_FF'
 
 atlasNames = [] # Names of the atlases
 atlasImageFilenames = [] # Filenames of the intensity images
 
 folderIndex = []
-
+tagArray = []
 
 for filename in data:
     name, extension = os.path.splitext(filename)
+
     # Substract the tagInPhase:
     atlasName = name.split('_')[0]
 
-    filenameImages = outPath + atlasName + tagInPhase + '.' + extensionImages
+    filenameImages = dataPath + name + '.' + extensionImages
 
-    if name.endswith(tagInPhase) and extension.endswith(extensionImages):
+    if extension.endswith(extensionImages):
         #\ and (atlasName not in atlasNamesImplantOrNotGood):
         # Atlas name:
         atlasNames.append(atlasName)
         # Intensity image:
         atlasImageFilenames.append(filenameImages)
+        #tag
+        tagArray.append(name[-1])
 
 
 print("Number of atlases images: {0}".format(len(atlasNames)))
@@ -73,9 +77,9 @@ for i in range(0, len(atlasNames)):
     origin = atlasImage.GetOrigin()
     direction = atlasImage.GetDirection()
 
-    new_spacing = [spc / 2 for spc in original_spacing]
+    new_spacing = [spc * 2 for spc in original_spacing]
     new_spacing[2] = original_spacing[2]
-    new_size = [int(sz * 2) for sz in original_size]
+    new_size = [int(sz / 2) for sz in original_size]
     new_size[2] = original_size[2]
 
     #resampled_image.SetDirection(direction)
@@ -88,7 +92,8 @@ for i in range(0, len(atlasNames)):
 
 
     # write the 3d images:
-    sitk.WriteImage(resampled_image, dataPath + atlasNames[i] + '_SEG' + '.' + extensionImages)
+    resampled_image = sitk.Cast(resampled_image, sitk.sitkFloat32)
+    sitk.WriteImage(resampled_image, outputPath + atlasNames[i] + '_ff.' + extensionImages)
 
     # Show images:
     if DEBUG:

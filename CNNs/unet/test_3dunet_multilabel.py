@@ -207,7 +207,7 @@ labelsValidSet = labelsValidSet.astype(np.float32)
 trainingSet = dict([('input', imagesTrainingSet[:, :, :, :]), ('output', labelsTrainingSet[:, :, :, :])])
 devSet = dict([('input', imagesValidSet[:, :, :, :]), ('output', labelsValidSet[:,:,:,:])])
 print('Data set size. Training set: {0}. Dev set: {1}.'.format(trainingSet['input'].shape[0], devSet['input'].shape[0]))
-labelNames = ('Background', 'Left Psoas', 'Left Iliac', 'Left Quadratus', 'Left Multifidus', 'Right Psoas', 'Right Iliac', 'Right Quadratus', 'Right Multifidus')
+labelNames = ('Background', 'Psoas izquierdo', 'Iliaco izquierdo', 'Cuadrado izquierdo', 'Multifido izquierdo', 'Psoas derecho', 'Iliaco Derecho', 'Cuadrado derecho', 'Multifido derecho')
 ####################### CREATE A U-NET MODEL #############################################
 # Create a UNET with one input and multiple output canal.
 multilabelNum = 8
@@ -217,7 +217,7 @@ if Background:
     criterion = nn.BCEWithLogitsLoss()
 else:
     labelNames = labelNames[1:]
-    xLabel = ['LP', 'LI', 'LQ', 'LM', 'RP', 'RI', 'RQ', 'RM']
+    xLabel = ['Pi', 'Ii', 'Ci', 'Mi', 'Pd', 'Id', 'Cd', 'Md']
     criterion = nn.BCEWithLogitsLoss()
 
 unet = Unet(1, multilabelNum)
@@ -309,9 +309,9 @@ for i in range(numBatches):
         segmentation = (segmentation > 0.5) * 1
         if saveMhd:
             if i==0:
-                outputTrainingSet = multilabel(segmentation, multilabelNum, Background)
+                outputTrainingSet = multilabel(segmentation,Background)
             else:
-                outputTrainingSet = np.append(outputTrainingSet, multilabel(segmentation, multilabelNum, Background), axis=0)
+                outputTrainingSet = np.append(outputTrainingSet, multilabel(segmentation, Background), axis=0)
 
         for k in range(label.shape[0]):
             for j in range(multilabelNum):
@@ -363,9 +363,9 @@ for i in range(devNumBatches):
     segmentation = (segmentation > 0.5) * 1
     if saveMhd:
         if i == 0:
-            outputValidSet = multilabel(segmentation, multilabelNum, Background)
+            outputValidSet = multilabel(segmentation, Background)
         else:
-            outputValidSet = np.append(outputValidSet, multilabel(segmentation, multilabelNum, Background), axis=0)
+            outputValidSet = np.append(outputValidSet, multilabel(segmentation, Background), axis=0)
 
     for k in range(label.shape[0]):
         for j in range(multilabelNum):
@@ -402,13 +402,13 @@ for k in range(multilabelNum):
 #boxplot:
 if Boxplot:
     boxplot(diceTraining[:], xlabel=xLabel[:],
-            outpath=(outputPath + 'Test_trainingBoxplot.png'), yscale=[0, 1], title='Training Dice Scores')
+            outpath=(outputPath + 'Test_trainingBoxplot.png'), yscale=[0, 1], title='Puntaje Dice en Set de Entrenamiento')
     boxplot(diceTraining, xlabel=xLabel,
-            outpath=(outputPath + 'Test_trainingBoxplot_shortScale.png'), yscale=[0.7, 1.0], title='Training Dice Scores')
+            outpath=(outputPath + 'Test_trainingBoxplot_shortScale.png'), yscale=[0.7, 1.0], title='Puntaje Dice en Set de Entrenamiento')
     boxplot(diceValid[:], xlabel=xLabel[:],
-            outpath=(outputPath + 'Test_validBoxplot.png'), yscale=[0.3, 1], title='Validation Dice Scores')
+            outpath=(outputPath + 'Test_validBoxplot.png'), yscale=[0.3, 1], title='Puntaje Dice en Set de Validación')
     boxplot(diceValid, xlabel=xLabel,
-            outpath=(outputPath + 'Test_validBoxplot_shortScale.png'), yscale=[0.7, 1.0], title='Validation Dice Scores')
+            outpath=(outputPath + 'Test_validBoxplot_shortScale.png'), yscale=[0.7, 1.0], title='Puntaje Dice en Set de Validación')
     boxplot(sensTraining[:], xlabel=xLabel[:],
             outpath=(outputPath + 'Test_trainingSensitivityBoxplot.png'), yscale=[0, 1], title='Training Sensitivity Scores')
     boxplot(sensValid[:], xlabel=xLabel[:],
