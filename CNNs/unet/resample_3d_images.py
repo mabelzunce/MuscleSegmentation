@@ -19,19 +19,18 @@ paramFileRigid = 'Parameters_Rigid_' + similarityMetricForReg
 paramFileAffine = 'Parameters_Affine_' + similarityMetricForReg
 ############################### IMAGES AVAILABLE ###################################
 
-dataPath = '../../Data/LumbarSpine3D/InputImages/'# Base data path.
-outputPath = '../../Data/LumbarSpine3D/ResampledImages/' # Base data path.
-if not os.path.exists(outputPath):
-    os.makedirs(outputPath)
+dataPath = 'D:/1LumbarSpineDixonData/ForLibrary/'# Base data path.
+outPath = 'D:/1LumbarSpineDixonData/ForLibrary/resampled/'
 # Get the atlases names and files:
 # Look for the folders or shortcuts:
-data = os.listdir(dataPath)
+data = os.listdir(outPath)
 data = sorted(data)
 # Image format extension:
 extensionShortcuts = 'lnk'
 strForShortcut = '-> '
 extensionImages = 'mhd'
-tagInPhase = '_I'
+tagInPhase = '_seg'
+tagLabels = '_labels'
 
 atlasNames = [] # Names of the atlases
 atlasImageFilenames = [] # Filenames of the intensity images
@@ -44,7 +43,7 @@ for filename in data:
     # Substract the tagInPhase:
     atlasName = name.split('_')[0]
 
-    filenameImages = dataPath + atlasName + tagInPhase + '.' + extensionImages
+    filenameImages = outPath + atlasName + tagInPhase + '.' + extensionImages
 
     if name.endswith(tagInPhase) and extension.endswith(extensionImages):
         #\ and (atlasName not in atlasNamesImplantOrNotGood):
@@ -74,9 +73,9 @@ for i in range(0, len(atlasNames)):
     origin = atlasImage.GetOrigin()
     direction = atlasImage.GetDirection()
 
-    new_spacing = [spc * 2 for spc in original_spacing]
+    new_spacing = [spc / 2 for spc in original_spacing]
     new_spacing[2] = original_spacing[2]
-    new_size = [int(sz / 2) for sz in original_size]
+    new_size = [int(sz * 2) for sz in original_size]
     new_size[2] = original_size[2]
 
     #resampled_image.SetDirection(direction)
@@ -84,11 +83,12 @@ for i in range(0, len(atlasNames)):
     resampler.SetSize(new_size)
     resampler.SetOutputSpacing(new_spacing)
     resampler.SetOutputOrigin(origin)
-    resampled_image = resampler.Execute(atlasImage)
     resampler.SetInterpolator(sitk.sitkNearestNeighbor)
+    resampled_image = resampler.Execute(atlasImage)
+
 
     # write the 3d images:
-    sitk.WriteImage(resampled_image, outputPath + atlasNames[i] + '.' + extensionImages)
+    sitk.WriteImage(resampled_image, dataPath + atlasNames[i] + '_SEG' + '.' + extensionImages)
 
     # Show images:
     if DEBUG:
