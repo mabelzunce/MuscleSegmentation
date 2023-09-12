@@ -6,6 +6,7 @@ from unet_2d import Unet
 import torch
 from utils import writeMhd
 from utils import filtered_multilabel
+from utils import maxProb
 
 ############################ DATA PATHS ##############################################
 dataPath = '../../Data/LumbarSpine2D/TestSubjects/'
@@ -31,59 +32,40 @@ if device.type == 'cuda':
     a = torch.cuda.memory_allocated(0)
     f = r-a  # free inside reserved
     print('Total memory: {0}. Reserved memory: {1}. Allocated memory:{2}. Free memory:{3}.'.format(t,r,a,f))
-###################### READ DATA AND PRE PROCESS IT FOR TRAINING DATA SETS #####################################################
-# Look for the folders or shortcuts:
-files = os.listdir(dataPath)
-files = sorted(files)
-imageNames = []
-imageFilenames = []
-i = 0
-for filename in files:
-    name, extension = os.path.splitext(filename)
-    # Check if filename is the in phase header and the labels exists:
-    filenameImages = dataPath + filename
-    if extension.endswith(extensionImages):
-        # Atlas name:
-        imageNames.append(name)
-        # Intensity image:
-        imageFilenames.append(filenameImages)
 
-
-# Initialize numpy array and read data:
-numImages = len(imageFilenames)
-
-for i in range(0, numImages):
-    # Read images and add them in a numpy array:
-    image = sitk.ReadImage(imageFilenames[i])
-    if i == 0:
-        imagesDataSet = np.zeros([numImages, image.GetSize()[1], image.GetSize()[0]], 'float32')
-        # Size of each 2d image:
-        dataSetImageSize_voxels = imagesDataSet.shape[1:3]
-    imagesDataSet[i, :, :] = np.reshape(sitk.GetArrayFromImage(image).astype(np.float32), [1, image.GetSize()[1], image.GetSize()[0]])
-    i = i + 1
-
-writeMhd(imagesDataSet.astype(np.float32), outputPath + 'Images.mhd')
-print("Number of images: {0}".format(len(imageNames)))
-print("List of images: {0}\n".format(imageNames))
-
-outputSegmentation = np.zeros(np.shape(imagesDataSet))
-imagesDataSet = np.expand_dims(imagesDataSet, axis=1)
+######################### MODEL INIT ######################
 multilabelNum = 6
 torch.cuda.empty_cache()
 model = Unet(1, multilabelNum)
 model.load_state_dict(torch.load(modelFilename, map_location=device))
 model = model.to(device)
+###################### READ DATA AND PRE PROCESS IT FOR TRAINING DATA SETS #####################################################
+# Look for the folders or shortcuts:
+folder = os.listdir(dataPath)
+folder = sorted(folder)
+imageNames = []
+imageFilenames = []
+i = 0
+for files in folder:
+    name, extension = os.path.splitext(files)
+    # Check if filename is the in phase header and the labels exists:
+    if extension.endswith('raw'):
+        continue
+    filenameImage = dataPath + files
+    sitkImage = sitk.ReadImage(filenameImage)
+    image = sitk.GetArrayFromImage(sitkImage).astype(np.float32)
+    image = np.expand_dims(image, axis=0)
+    with torch.no_grad():
+        input = torch.from_numpy(image).to(device)
+        output = model(input.unsqueeze(0))
+        output = torch.sigmoid(output.cpu().to(torch.float32))
+        output = maxProb(output, multilabelNum)
+        output = filtered_multilabel((output > 0.5) * 1)
+        output = output.squeeze(0)
+    output = sitk.GetImageFromArray(output)
+    output.CopyInformation(sitkImage)
+    sitk.WriteImage(sitk.Cast(output,sitk.sitkUInt8), outputPath + name.split('_')[0] + '_seg' + extension)
 
 
-####################### LOAD MODEL ########################
-with torch.no_grad():
-    ####################### RUN UNET ##########################
-    for i, image in enumerate(imagesDataSet):
-        inputs = torch.from_numpy(image).to(device)
-        outputs = model(inputs.unsqueeze(0))
-        outputs = torch.sigmoid(outputs.cpu().to(torch.float32))
-        outputs = (outputs > 0.5) * 1
-        outputSegmentation[i] = filtered_multilabel(outputs.detach().numpy())
 
-writeMhd(outputSegmentation.astype(np.float32), outputPath + 'segmentedImages.mhd')
 

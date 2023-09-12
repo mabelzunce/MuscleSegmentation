@@ -137,9 +137,9 @@ def multilabel(image,Background = False):
     outImage = np.zeros(shape)
     for k in range(numLabels):
         if Background:
-            outImage = outImage + image[:, k, :, :, :] * k
+            outImage = outImage + image[:, k, :, :] * k
         else:
-            outImage = outImage + image[:, k, :, :, :] * (k + 1)
+            outImage = outImage + image[:, k, :, :] * (k + 1)
     return outImage
 
 

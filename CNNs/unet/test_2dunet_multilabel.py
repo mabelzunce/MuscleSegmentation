@@ -5,7 +5,7 @@ import os
 import math
 from datetime import datetime
 from utils import create_csv
-from utils import dice2d
+from utils import dice
 from utils import specificity
 from utils import sensitivity
 from utils import precision
@@ -34,7 +34,7 @@ saveMhd = True        # Saves a mhd file for the output
 saveDataSetMhd = True  # Saves a Mhd file of the images and labels from dataset
 Background = False       # Background is considered as label
 Boxplot = True           # Boxplot created in every best fit
-AugmentedTrainingSet = Augment.A
+AugmentedTrainingSet = Augment.NA
 # Para correr la prueba corroborar que cantidad de filtros  establecidos  en "unet_2d" es igual a los del modelo
 
 ############################ DATA PATHS ##############################################
@@ -308,13 +308,13 @@ for i in range(numBatches):
         segmentation = maxProb(segmentation.detach().numpy(), multilabelNum)
         segmentation = (segmentation > 0.5) * 1
         if saveMhd:
-            outputTrainingSet[i*batchSize:(i+1)*batchSize] = multilabel(segmentation, multilabelNum, Background)
+            outputTrainingSet[i*batchSize:(i+1)*batchSize] = filtered_multilabel(segmentation, Background)
 
         for k in range(label.shape[0]):
             for j in range(multilabelNum):
                 lbl = label[k, j, :, :]
                 seg = segmentation[k, j, :, :]
-                diceScore = dice2d(lbl, seg)
+                diceScore = dice(lbl, seg)
                 specScore = specificity(lbl, seg)
                 sensScore = sensitivity(lbl, seg)
                 precScore = precision(lbl, seg)
@@ -359,14 +359,14 @@ for i in range(devNumBatches):
     segmentation = maxProb(segmentation.detach().numpy(), multilabelNum)
     segmentation = (segmentation > 0.5) * 1
     if saveMhd:
-        outputValidSet[i * devBatchSize:(i + 1) * devBatchSize] = filtered_multilabel(segmentation, multilabelNum, Background)
+        outputValidSet[i * devBatchSize:(i + 1) * devBatchSize] = filtered_multilabel(segmentation, Background)
 
     for k in range(label.shape[0]):
         for j in range(multilabelNum):
             lbl = label[k, j, :, :]
             #lbl = labelfilter(lbl)
             seg = segmentation[k, j, :, :]
-            diceScore = dice2d(lbl, seg)
+            diceScore = dice(lbl, seg)
             specScore = specificity(lbl, seg)
             sensScore = sensitivity(lbl, seg)
             precScore = precision(lbl, seg)
@@ -387,7 +387,7 @@ lossValuesDevSetAllEpoch.append(avg_vloss)
 print('avg_vloss: %f' % avg_vloss)
 
 for k in range(multilabelNum):
-    create_csv(diceValidEpoch[k], outputPath + 'Test_ValidDice_' + labelNames[k] + '.csv')
+    create_csv(diceValid[k], outputPath + 'Test_ValidDice_' + labelNames[k] + '.csv')
     create_csv(sensValidEpoch[k], outputPath + 'Test_ValidSensitivity_' + labelNames[k] + '.csv')
     create_csv(specValidEpoch[k], outputPath + 'Test_ValidSpecificity_' + labelNames[k] + '.csv')
     create_csv(precValidEpoch[k], outputPath + 'Test_ValidPrecision_' + labelNames[k] + '.csv')
@@ -421,6 +421,7 @@ if Boxplot:
 if saveMhd:
     writeMhd(outputTrainingSet.astype(np.uint8), outputPath + 'outputTrainingSet.mhd')
     writeMhd(outputValidSet.astype(np.uint8), outputPath + 'outputValidSet.mhd')
+torch.save(unet, outputPath + 'unetFullModel.pt')
 print('Test Finished')
 
 

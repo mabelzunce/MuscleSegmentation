@@ -60,7 +60,7 @@ ax.set_xticks(pos4)
 ax.set_xticklabels(Weight)
 
 
-ax.set_title('Validation Dice Scores')
+ax.set_title('Validation Dice scores')
 ax.set_xlabel('Weight')
 ax.set_ylabel('Score')
 ax.set_ylim(0.85, 1)  # Set the lower and upper bounds of the y-axis
