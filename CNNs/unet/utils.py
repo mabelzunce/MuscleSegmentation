@@ -142,6 +142,15 @@ def multilabel(image,Background = False):
             outImage = outImage + image[:, k, :, :] * (k + 1)
     return outImage
 
+def maskSize(image):
+    numLabels = np.max(image)
+    outArray = []
+    for k in range(numLabels):
+        auximage = (image == k+1)
+        outArray.append(np.sum(auximage))
+    outArray = np.array(outArray, dtype=np.float64)
+    return outArray
+
 
 def labelfilter(image):
     filteredimage = sitk.GetImageFromArray(image)   # imagen binaria
@@ -242,7 +251,6 @@ def boxplot(data, xlabel, outpath, yscale, title):
     plt.boxplot(data, labels=xlabel)
     plt.title(title)
     plt.ylim(yscale)
-    plt.ylabel('')
     plt.savefig(outpath)
     plt.close()
 
