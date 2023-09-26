@@ -4,19 +4,20 @@ import csv
 import os
 
 
-dataPath ='../../Data/LumbarSpine3D/InputImages/'
-outputPath ='../../Data/LumbarSpine3D/'
+dataPath = 'D:/1LumbarSpineDixonData/2D Images/'
+outputPath = 'D:/1LumbarSpineDixonData/'
 
-muscleNames = ['Left Psoas','Left Iliacus','Left Quadratus','Left Paraspinal','Right Psoas','Right Iliacus','Right Quadratus','Right Paraspinal','Avg']
+muscleNames = ['Left Multifidus','Right Multifidus','Left Quadratus','Right Quadratus','Left Psoas','Right Psoas','Avg']
 folder = os.listdir(dataPath)
 folder = sorted(folder)
-tagFatFraction = '_ff.mhd'
+tagFatFraction = '_FF.mhd'
 tagMask = '_seg.mhd'
 auxName = str
 
 with open(outputPath + 'fatfraction.csv',mode='w', newline="") as csv_file:
     csv_writer = csv.writer(csv_file)
     header = list(('subject', *muscleNames))
+    csv_writer.writerow(header)
     for files in folder:
         name = os.path.splitext(files)[0]
         if name.split('_')[0] != auxName:

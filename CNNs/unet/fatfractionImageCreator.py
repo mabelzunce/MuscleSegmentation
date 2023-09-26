@@ -8,7 +8,6 @@ outputPath = '../../Data/LumbarSpine3D/'
 folder = sorted(os.listdir(dataPath))
 
 extensionImages = '.mhd'
-suffixArray = ['_F', '_I', '_O', '_W']
 inPhaseSuffix = '_I'
 outOfPhaseSuffix = '_O'
 waterSuffix = '_W'

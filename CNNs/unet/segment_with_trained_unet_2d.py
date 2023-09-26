@@ -1,19 +1,18 @@
 import SimpleITK as sitk
-import matplotlib.pyplot as plt
 import numpy as np
 import os
 from unet_2d import Unet
 import torch
-from utils import writeMhd
 from utils import filtered_multilabel
 from utils import maxProb
 
 ############################ DATA PATHS ##############################################
-dataPath = '../../Data/LumbarSpine2D/TestSubjects/'
+dataPath = 'D:/1LumbarSpineDixonData/2D Images/'
 outputPath = '../../Data/LumbarSpine2D/model/'
 modelLocation = '../../Data/LumbarSpine2D/PretrainedModel/'
 # Image format extension:
-extensionImages = 'mhd'
+inPhaseTag = '_I'
+extension = '.mhd'
 
 modelName = os.listdir(modelLocation)[0]
 modelFilename = modelLocation + modelName
@@ -43,16 +42,14 @@ model = model.to(device)
 # Look for the folders or shortcuts:
 folder = os.listdir(dataPath)
 folder = sorted(folder)
-imageNames = []
-imageFilenames = []
-i = 0
+auxName = str
 for files in folder:
-    name, extension = os.path.splitext(files)
-    # Check if filename is the in phase header and the labels exists:
-    if extension.endswith('raw'):
+    name = os.path.splitext(files)[0]
+    if name.split('_')[0] != auxName:
+        auxName = name.split('_')[0]
+        sitkImage = sitk.ReadImage(dataPath + auxName + inPhaseTag + extension)
+    else:
         continue
-    filenameImage = dataPath + files
-    sitkImage = sitk.ReadImage(filenameImage)
     image = sitk.GetArrayFromImage(sitkImage).astype(np.float32)
     image = np.expand_dims(image, axis=0)
     with torch.no_grad():

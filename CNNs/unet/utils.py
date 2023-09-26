@@ -242,7 +242,7 @@ def boxplot(data, xlabel, outpath, yscale, title):
     plt.boxplot(data, labels=xlabel)
     plt.title(title)
     plt.ylim(yscale)
-    plt.ylabel('Score')
+    plt.ylabel('')
     plt.savefig(outpath)
     plt.close()
 

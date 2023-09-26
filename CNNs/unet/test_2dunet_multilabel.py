@@ -193,7 +193,8 @@ labelsValidSet = labelsValidSet.astype(np.float32)
 trainingSet = dict([('input', imagesTrainingSet[:, :, :, :]), ('output', labelsTrainingSet[:, :, :, :])])
 devSet = dict([('input', imagesValidSet[:, :, :, :]), ('output', labelsValidSet[:,:,:,:])])
 print('Data set size. Training set: {0}. Dev set: {1}.'.format(trainingSet['input'].shape[0], devSet['input'].shape[0]))
-labelNames = ('Left Multifidus', 'Right Multifidus', 'Left Quadratus', 'Right Quadratus', 'Left Psoas', 'Right Psoas')
+labelNames = ('Erector Spinae + Multifidus Izquierdo', 'Erector Spinae + Multifidus Derecho', 'Cuadrado Lumbar Izquierdo',
+              'Cuadrado Lumbar Derecho', 'Psoas Izquierdo', 'Psoas Derecho')
 if Background:
     labelNames = ('Background', 'Left Multifidus', 'Right Multifidus', 'Left Quadratus', 'Right Quadratus', 'Left Psoas', 'Right Psoas')
 ####################### CREATE A U-NET MODEL #############################################
@@ -206,7 +207,7 @@ if Background:
     pos_weights = pos_weights.to(device)
     criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights)
 else:
-    xLabel = ['LM', 'RM', 'LQ', 'RQ', 'LP', 'RP']
+    xLabel = ['$ES+M_i$', '$ES+M_d$', '$CL_i$', '$CL_d$', '$P_i$', '$P_d$']
     criterion = nn.BCEWithLogitsLoss()
 
 unet = Unet(1, multilabelNum)
@@ -388,36 +389,32 @@ print('avg_vloss: %f' % avg_vloss)
 
 for k in range(multilabelNum):
     create_csv(diceValid[k], outputPath + 'Test_ValidDice_' + labelNames[k] + '.csv')
-    create_csv(sensValidEpoch[k], outputPath + 'Test_ValidSensitivity_' + labelNames[k] + '.csv')
-    create_csv(specValidEpoch[k], outputPath + 'Test_ValidSpecificity_' + labelNames[k] + '.csv')
-    create_csv(precValidEpoch[k], outputPath + 'Test_ValidPrecision_' + labelNames[k] + '.csv')
+    create_csv(sensValid[k], outputPath + 'Test_ValidSensitivity_' + labelNames[k] + '.csv')
+    create_csv(specValid[k], outputPath + 'Test_ValidSpecificity_' + labelNames[k] + '.csv')
+    create_csv(precValid[k], outputPath + 'Test_ValidPrecision_' + labelNames[k] + '.csv')
 
 
 
 #boxplot:
 if Boxplot:
     boxplot(diceTraining[:], xlabel=xLabel[:],
-            outpath=(outputPath + 'Test_trainingBoxplot.png'), yscale=[0, 1], title='Training Dice Scores')
+            outpath=(outputPath + 'Test_trainingBoxplot.png'), yscale=[0, 1], title='Puntaje Dice en Set de Entrenamiento')
     boxplot(diceTraining, xlabel=xLabel,
-            outpath=(outputPath + 'Test_trainingBoxplot_shortScale.png'), yscale=[0.7, 1.0], title='Training Dice Scores')
+            outpath=(outputPath + 'Test_trainingBoxplot_shortScale.png'), yscale=[0.7, 1.0], title='Puntaje Dice en Set de Entrenamiento')
     boxplot(diceValid[:], xlabel=xLabel[:],
-            outpath=(outputPath + 'Test_validBoxplot.png'), yscale=[0, 1], title='Validation Dice Scores')
+            outpath=(outputPath + 'Test_validBoxplot.tif'), yscale=[0, 1], title='Puntaje Dice en Set de Validación')
     boxplot(diceValid, xlabel=xLabel,
-            outpath=(outputPath + 'Test_validBoxplot_shortScale.png'), yscale=[0.7, 1.0], title='Validation Dice Scores')
-    boxplot(sensTraining[:], xlabel=xLabel[:],
-            outpath=(outputPath + 'Test_trainingSensitivityBoxplot.png'), yscale=[0, 1], title='Training Sensitivity Scores')
+            outpath=(outputPath + 'Test_validBoxplot_shortScale.tif'), yscale=[0.7, 1.0], title='Puntaje Dice en Set de Validación')
     boxplot(sensValid[:], xlabel=xLabel[:],
-            outpath=(outputPath + 'Test_validSensitivityBoxplot.png'), yscale=[0, 1], title='Validation Sensitivity Scores')
-    boxplot(specTraining[:], xlabel=xLabel[:],
-            outpath=(outputPath + 'Test_trainingSpecificityBoxplot.png'), yscale=[0, 1], title='Training Specificity Scores')
+            outpath=(outputPath + 'Test_validSensitivityBoxplot.tif'), yscale=[0.7, 1], title='Sensibilidad en set de Validación')
     boxplot(specValid[:], xlabel=xLabel[:],
-            outpath=(outputPath + 'Test_validSpecificityBoxplot.png'), yscale=[0, 1], title='Valid Specificity Scores')
+            outpath=(outputPath + 'Test_validSpecificityBoxplot.tif'), yscale=[0.7, 1], title='Especificidad en set de Validación')
     boxplot(precValid, xlabel=xLabel,
-            outpath=(outputPath + 'Test_validPrecisionBoxplot.png'), yscale=[0.7, 1], title='Valid Precision Scores')
+            outpath=(outputPath + 'Test_validPrecisionBoxplot.tif'), yscale=[0.7, 1], title='Precisión en set de Validación')
     for k in range(multilabelNum):
         boxplot(data=(diceTraining[k], diceValid[k]),
-                xlabel=['Training Set', 'Valid Set'], outpath=(outputPath + labelNames[k] + '_boxplot.png'),
-                yscale=[0.7, 1.0], title=labelNames[k]+' Dice Scores')
+                xlabel=['Entrenamiento', 'Validación'], outpath=(outputPath + labelNames[k] + '_boxplot.png'),
+                yscale=[0.7, 1.0], title='Puntaje Dice' + labelNames[k])
 if saveMhd:
     writeMhd(outputTrainingSet.astype(np.uint8), outputPath + 'outputTrainingSet.mhd')
     writeMhd(outputValidSet.astype(np.uint8), outputPath + 'outputValidSet.mhd')
