@@ -28,8 +28,8 @@ class Augment(enumerate):
     A = 3   #Augmented
 
 
-saveMhd = True        # Saves a mhd file for the output
-saveDataSetMhd = True  # Saves a Mhd file of the images and labels from dataset
+saveMhd = False        # Saves a mhd file for the output
+saveDataSetMhd = False  # Saves a Mhd file of the images and labels from dataset
 Background = False       # Background is considered as label
 Boxplot = True           # Boxplot created in every best fit
 AugmentedTrainingSet = Augment.NA
@@ -207,7 +207,7 @@ labelsValidSet = labelsValidSet.astype(np.float32)
 trainingSet = dict([('input', imagesTrainingSet[:, :, :, :]), ('output', labelsTrainingSet[:, :, :, :])])
 devSet = dict([('input', imagesValidSet[:, :, :, :]), ('output', labelsValidSet[:,:,:,:])])
 print('Data set size. Training set: {0}. Dev set: {1}.'.format(trainingSet['input'].shape[0], devSet['input'].shape[0]))
-labelNames = ('Background', 'Psoas izquierdo', 'Iliaco izquierdo', 'Cuadrado izquierdo', 'Multifido izquierdo', 'Psoas derecho', 'Iliaco Derecho', 'Cuadrado derecho', 'Multifido derecho')
+labelNames = ('Background', 'Psoas izquierdo', 'Iliaco izquierdo', 'Cuadrado izquierdo', 'Paraespinal Posterior izquierdo', 'Psoas derecho', 'Iliaco Derecho', 'Cuadrado derecho', 'Paraespinal Posterior derecho')
 ####################### CREATE A U-NET MODEL #############################################
 # Create a UNET with one input and multiple output canal.
 multilabelNum = 8
@@ -217,7 +217,7 @@ if Background:
     criterion = nn.BCEWithLogitsLoss()
 else:
     labelNames = labelNames[1:]
-    xLabel = ['Pi', 'Ii', 'Ci', 'Mi', 'Pd', 'Id', 'Cd', 'Md']
+    xLabel = ['LP', 'LI', 'LQL', 'LES+M', 'RP', 'RI', 'RQL', 'RES+M']
     criterion = nn.BCEWithLogitsLoss()
 
 unet = Unet(1, multilabelNum)
@@ -279,6 +279,12 @@ specValid = [[] for n in range(multilabelNum)]
 specTrainingEpoch = [[] for n in range(multilabelNum)]
 specValidEpoch = [[] for n in range(multilabelNum)]
 
+precTraining = [[] for n in range(multilabelNum)]
+precValid = [[] for n in range(multilabelNum)]
+
+precTrainingEpoch = [[] for n in range(multilabelNum)]
+precValidEpoch = [[] for n in range(multilabelNum)]
+
 #### TRAINING ####
 
 unet.train(False)
@@ -320,11 +326,11 @@ for i in range(numBatches):
                 diceScore = dice2d(lbl, seg)
                 specScore = specificity(lbl, seg)
                 sensScore = sensitivity(lbl, seg)
-                #precScore = precision(lbl, seg)
+                precScore = precision(lbl, seg)
                 diceTraining[j].append(diceScore)
                 specTraining[j].append(specScore)
                 sensTraining[j].append(sensScore)
-                #precTraining[j].append(precScore)
+                precTraining[j].append(precScore)
 
 for j in range(multilabelNum):
     diceTrainingEpoch[j].append(np.mean(diceTraining[j]))
@@ -374,17 +380,16 @@ for i in range(devNumBatches):
             diceScore = dice2d(lbl, seg)
             specScore = specificity(lbl, seg)
             sensScore = sensitivity(lbl, seg)
-            #precScore = precision(lbl, seg)
+            precScore = precision(lbl, seg)
             diceValid[j].append(diceScore)
             specValid[j].append(specScore)
             sensValid[j].append(sensScore)
-            #precValid[j].append(precScore)
-
+            precValid[j].append(precScore)
 for j in range(multilabelNum):
     diceValidEpoch[j].append(np.mean(diceValid[j]))
     specValidEpoch[j].append(np.mean(specValid[j]))
     sensValidEpoch[j].append(np.mean(sensValid[j]))
-    #precValidEpoch[j].append(np.mean(precValid[j]))
+    precValidEpoch[j].append(np.mean(precValid[j]))
     print('Valid Dice Score:  %f ' % np.mean(diceValid[j]))
 
 avg_vloss = np.mean(lossValuesDevSetEpoch)
@@ -393,36 +398,36 @@ print('avg_vloss: %f' % avg_vloss)
 
 for k in range(multilabelNum):
     create_csv(diceValid[k], outputPath + 'Test_ValidDice_' + labelNames[k] + '.csv')
-    create_csv(sensValidEpoch[k], outputPath + 'Test_ValidSensitivity_' + labelNames[k] + '.csv')
-    create_csv(specValidEpoch[k], outputPath + 'Test_ValidSpecificity_' + labelNames[k] + '.csv')
-    #create_csv(precValidEpoch[k], outputPath + 'Test_ValidPrecision_' + labelNames[k] + '.csv')
+    create_csv(sensValid[k], outputPath + 'Test_ValidSensitivity_' + labelNames[k] + '.csv')
+    create_csv(specValid[k], outputPath + 'Test_ValidSpecificity_' + labelNames[k] + '.csv')
+    create_csv(precValid[k], outputPath + 'Test_ValidPrecision_' + labelNames[k] + '.csv')
 
 
 
 #boxplot:
 if Boxplot:
     boxplot(diceTraining[:], xlabel=xLabel[:],
-            outpath=(outputPath + 'Test_trainingBoxplot.png'), yscale=[0, 1], title='Puntaje Dice en Set de Entrenamiento')
+            outpath=(outputPath + 'Test_trainingBoxplot.tif'), yscale=[0, 1], title='Puntaje Dice en Set de Entrenamiento')
     boxplot(diceTraining, xlabel=xLabel,
-            outpath=(outputPath + 'Test_trainingBoxplot_shortScale.png'), yscale=[0.7, 1.0], title='Puntaje Dice en Set de Entrenamiento')
+            outpath=(outputPath + 'Test_trainingBoxplot_shortScale.tif'), yscale=[0.7, 1.0], title='Puntaje Dice en Set de Entrenamiento')
     boxplot(diceValid[:], xlabel=xLabel[:],
-            outpath=(outputPath + 'Test_validBoxplot.png'), yscale=[0.3, 1], title='Puntaje Dice en Set de Validación')
+            outpath=(outputPath + 'Test_validBoxplot.tif'), yscale=[0, 1], title='Validation Set Dice Scores')
     boxplot(diceValid, xlabel=xLabel,
-            outpath=(outputPath + 'Test_validBoxplot_shortScale.png'), yscale=[0.7, 1.0], title='Puntaje Dice en Set de Validación')
+            outpath=(outputPath + 'Test_validBoxplot_shortScale.tif'), yscale=[0.7, 1.0], title='Validation Set Dice Scores')
     boxplot(sensTraining[:], xlabel=xLabel[:],
-            outpath=(outputPath + 'Test_trainingSensitivityBoxplot.png'), yscale=[0, 1], title='Training Sensitivity Scores')
+            outpath=(outputPath + 'Test_trainingSensitivityBoxplot.tif'), yscale=[0, 1], title='Sensibilidad en set de entrenamiento')
     boxplot(sensValid[:], xlabel=xLabel[:],
-            outpath=(outputPath + 'Test_validSensitivityBoxplot.png'), yscale=[0, 1], title='Validation Sensitivity Scores')
+            outpath=(outputPath + 'Test_validSensitivityBoxplot.tif'), yscale=[0, 1], title='Validation Sensitivity Scores')
     boxplot(specTraining[:], xlabel=xLabel[:],
-            outpath=(outputPath + 'Test_trainingSpecificityBoxplot.png'), yscale=[0, 1], title='Training Specificity Scores')
+            outpath=(outputPath + 'Test_trainingSpecificityBoxplot.tif'), yscale=[0, 1], title='Especificidad en set de entrenamiento')
     boxplot(specValid[:], xlabel=xLabel[:],
-            outpath=(outputPath + 'Test_validSpecificityBoxplot.png'), yscale=[0, 1], title='Valid Specificity Scores')
-    #boxplot(precValid, xlabel=xLabel,
-    #        outpath=(outputPath + 'Test_validPrecisionBoxplot.png'), yscale=[0.7, 1], title='Valid Precision Scores')
+            outpath=(outputPath + 'Test_validSpecificityBoxplot.tif'), yscale=[0, 1], title='Especificidad en set de Validacion')
+    boxplot(precValid[:], xlabel=xLabel,
+        outpath=(outputPath + 'Test_validPrecisionBoxplot.tif'), yscale=[0.7, 1], title='Precisión en set de validación')
     for k in range(multilabelNum):
         boxplot(data=(diceTraining[k], diceValid[k]),
-                xlabel=['Training Set', 'Valid Set'], outpath=(outputPath + labelNames[k] + '_boxplot.png'),
-                yscale=[0.7, 1.0], title=labelNames[k]+' Dice Scores')
+                xlabel=['Entrenamiento', 'Validación'], outpath=(outputPath + labelNames[k] + '_boxplot.tif'),
+                yscale=[0.7, 1.0], title=labelNames[k]+' Puntaje Dice')
 if saveMhd:
     writeMhd(outputTrainingSet.astype(np.uint8), outputPath + 'outputTrainingSet.mhd')
     writeMhd(outputValidSet.astype(np.uint8), outputPath + 'outputValidSet.mhd')
