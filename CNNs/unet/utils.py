@@ -143,7 +143,7 @@ def multilabel(image,Background = False):
     return outImage
 
 def maskSize(image):
-    numLabels = np.max(image)
+    numLabels = np.max(image).astype(np.uint8)
     outArray = []
     for k in range(numLabels):
         auximage = (image == k+1)

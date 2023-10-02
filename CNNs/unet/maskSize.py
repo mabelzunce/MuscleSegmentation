@@ -5,16 +5,16 @@ import os
 from utils import maskSize
 
 
-dataPath ='../../Data/LumbarSpine3D/InputImages/'
-outputPath ='../../Data/LumbarSpine3D/'
+dataPath ='D:/1LumbarSpineDixonData/2DManualSegmentations/'
+outputPath ='D:/1LumbarSpineDixonData/'
 
-muscleNames = ['Left Psoas','Left Iliacus','Left Quadratus','Left Multifidus','Right Psoas','Right Iliacus','Right Quadratus','Right Multifidus']
+muscleNames = ['Left P','Right P','Left QL','Right QL','Left ES+M','Right ES+M']
 folder = os.listdir(dataPath)
 folder = sorted(folder)
-tagMask = '_seg.mhd'
+tagMask = '_labels.mhd'
 auxName = str
 
-with open(outputPath + 'volume.csv', mode='w', newline="") as csv_file:
+with open(outputPath + 'CSA_ManualSegmentations2D.csv', mode='w', newline="") as csv_file:
     csv_writer = csv.writer(csv_file)
     header = list(('subject', *muscleNames))
     csv_writer.writerow(header)
@@ -23,11 +23,13 @@ with open(outputPath + 'volume.csv', mode='w', newline="") as csv_file:
         if name.split('_')[0] != auxName:
             auxName = name.split('_')[0]
             mask = sitk.ReadImage(dataPath + auxName + tagMask)
-            maskArray = sitk.GetArrayFromImage(mask)
+            maskArray = sitk.GetArrayFromImage(mask).astype(np.float64)
         else:
             continue
-        maskMaxValue = np.max(sitk.GetArrayViewFromImage(mask)).astype(np.uint8)
-        muscleSize = maskSize(maskArray)
+        segmentationSize = maskSize(maskArray)
+        voxelSize = np.prod(list(mask.GetSpacing()))
+        muscleSize = segmentationSize * voxelSize/100
         csvRow = (auxName, *muscleSize)
         csvRow = list(csvRow)
+        print(auxName)
         csv_writer.writerow(csvRow)
