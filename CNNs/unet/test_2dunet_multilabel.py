@@ -32,7 +32,7 @@ class Augment(enumerate):
 
 saveMhd = True        # Saves a mhd file for the output
 saveDataSetMhd = True  # Saves a Mhd file of the images and labels from dataset
-Background = False       # Background is considered as label
+Background = True       # Background is considered as label
 Boxplot = True           # Boxplot created in every best fit
 AugmentedTrainingSet = Augment.NA
 # Para correr la prueba corroborar que cantidad de filtros  establecidos  en "unet_2d" es igual a los del modelo
@@ -196,13 +196,14 @@ print('Data set size. Training set: {0}. Dev set: {1}.'.format(trainingSet['inpu
 labelNames = ('Erector Spinae + Multifidus Izquierdo', 'Erector Spinae + Multifidus Derecho', 'Cuadrado Lumbar Izquierdo',
               'Cuadrado Lumbar Derecho', 'Psoas Izquierdo', 'Psoas Derecho')
 if Background:
-    labelNames = ('Background', 'Left Multifidus', 'Right Multifidus', 'Left Quadratus', 'Right Quadratus', 'Left Psoas', 'Right Psoas')
+    labelNames = ('fondo','Erector Spinae + Multifidus Izquierdo', 'Erector Spinae + Multifidus Derecho', 'Cuadrado Lumbar Izquierdo',
+              'Cuadrado Lumbar Derecho', 'Psoas Izquierdo', 'Psoas Derecho')
 ####################### CREATE A U-NET MODEL #############################################
 # Create a UNET with one input and multiple output canal.
 multilabelNum = 6
 if Background:
     multilabelNum += 1
-    xLabel = ['BG', 'LM', 'RM', 'LQ', 'RQ', 'LP', 'RP']
+    xLabel = ['fondo','$ES+M_i$', '$ES+M_d$', '$CL_i$', '$CL_d$', '$P_i$', '$P_d$']
     pos_weights = rel_weights(labelsTrainingSet, multilabelNum, Background)
     pos_weights = pos_weights.to(device)
     criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights)
@@ -212,7 +213,6 @@ else:
 
 unet = Unet(1, multilabelNum)
 unet.load_state_dict(torch.load(unetFilename, map_location=device))
-
 
 #tensorGroundTruth.shape
 ##################################### U-NET TRAINING ############################################

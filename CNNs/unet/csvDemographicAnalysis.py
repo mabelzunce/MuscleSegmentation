@@ -1,11 +1,9 @@
-import os
 import csv
 import numpy as np
 import matplotlib.pyplot as plt
-from utils import violinPlot
 dataPath ="../../../MuscleSegmentation/"
 Matrix = []
-with open(dataPath + 'FatFraction3D.csv', mode='r', newline="") as csvfile:
+with open(dataPath + 'Fatfraction3D.csv', mode='r', newline="") as csvfile:
     # Create a CSV reader
     csvreader = csv.reader(csvfile)
     # Iterate through the rows in the CSV file

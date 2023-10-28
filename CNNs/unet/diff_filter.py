@@ -6,40 +6,26 @@ import numpy as np
 datapath = '..\\..\\Data\\ModelDiff\\FilterDiff\\'
 
 Filters = ['64', '32', '16', '8']
-muscleNames = ['LM', 'LP', 'LQ', 'RM', 'RP', 'RQ']
-Folders = [datapath + Filters[0], datapath + Filters[1], datapath + Filters[2], datapath + Filters[3]]
+muscleNames = ['$ES+M_i$', '$ES+M_d$', '$CL_i$', '$CL_d$', '$P_i$', '$P_d$']
+Folders = [datapath + Filters[0], datapath + Filters[1], datapath + Filters[2]]
 
-DiceValues = [[] for n in range(len(Filters))]
-BestVlossRow = []
+DiceValues = [[] for n in range(len(Filters)-1)]
 
-for f in Folders:
-    Lossfile = os.listdir(f)[6]
-    Lossfile = os.path.join(f, Lossfile)
-    with open(Lossfile) as file:
-        csv_reader = csv.reader(file)
-        next(csv_reader)  # Skip the header row
-        min_value = 1
-        for row in csv_reader:
-            if min_value > float(row[1]):
-                min_value = float(row[1])
-                rowNum = int(row[0])
-    BestVlossRow.append(rowNum)
-
-for i, f in enumerate(Folders):        # Weight Filenames
-    muscles = os.listdir(f)[:6]     # Lists Muscles per Augment
+for i, f in enumerate(Folders):                 #Weight Filenames
+    muscles = os.listdir(f)      # Lists Muscles per Augment
     sumValue = 0
     for m in muscles[:(len(muscleNames))]:
+        values = []
         filepath = os.path.join(f, m)
         with open(filepath) as file:
             csv_reader = csv.reader(file)
             next(csv_reader)
             for row in csv_reader:
-                if int(row[0]) == BestVlossRow[i]:
-                    Value = float(row[1])
-                    sumValue += Value
-                    DiceValues[i].append(Value)
-    meanValue = sumValue / len(muscleNames)
-    DiceValues[i].append(meanValue)
+                values.append(float(row[1]))
+        DiceValues[i].append(np.mean(values))
+
+    DiceValues[i].append(np.mean(DiceValues[i]))
+
 
 DiceValues = np.transpose(DiceValues)
 bar_width = 0.1
@@ -67,18 +53,18 @@ ax.bar(pos3, y_values3, width=bar_width, label=muscleNames[2], color='sandybrown
 ax.bar(pos4, y_values4, width=bar_width, label=muscleNames[3], color='khaki')
 ax.bar(pos5, y_values5, width=bar_width, label=muscleNames[4], color='yellowgreen')
 ax.bar(pos6, y_values6, width=bar_width, label=muscleNames[5], color='steelblue')
-ax.bar(pos7, y_values7, width=bar_width, label="Average", color='black')
+ax.bar(pos7, y_values7, width=bar_width, label="Promedio", color='black')
 
 ax.set_xticks(pos4)
 ax.set_xticklabels(Filters)
 
 
-ax.set_title('Validation Dice Scores')
-ax.set_xlabel('Filters')
-ax.set_ylabel('Score')
+ax.set_title('Puntaje Dice en Set de Validación')
+ax.set_xlabel('N° Filtros')
+
 ax.set_ylim(0.85, 1)  # Set the lower and upper bounds of the y-axis
 ax.legend()
-plt.savefig(datapath + 'FilterDiff.png')
+plt.savefig(datapath + 'FilterDiff.tiff')
 ax.set_ylim(0, 1)
-plt.savefig(datapath + 'FilterDiffBigScale.png')
+plt.savefig(datapath + 'FilterDiffBigScale.tiff')
 

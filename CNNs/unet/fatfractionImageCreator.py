@@ -25,5 +25,4 @@ for files in folder:
     waterfatImage = sitk.Add(fatImage, waterImage)
     fatfractionImage = sitk.Divide(fatImage, waterfatImage)
     fatfractionImage = sitk.Cast(sitk.Mask(fatfractionImage, waterfatImage > 0, outsideValue=0, maskingValue=0), sitk.sitkFloat32)
-
     sitk.WriteImage(fatfractionImage, outputPath + auxName + '_ff' + extensionImages)

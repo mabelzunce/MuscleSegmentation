@@ -84,16 +84,16 @@ class Unet(nn.Module):
         self.n_channels = in_channels
         self.n_classes = classes
 
-        self.inc = InConv(in_channels, 64)
-        self.down1 = Down(64, 128)
-        self.down2 = Down(128, 256)
-        self.down3 = Down(256, 512)
-        self.down4 = Down(512, 512)
-        self.up1 = Up(1024, 256)
-        self.up2 = Up(512, 128)
-        self.up3 = Up(256, 64)
-        self.up4 = Up(128, 32)
-        self.outc = OutConv(32, classes)
+        self.inc = InConv(in_channels, 8)
+        self.down1 = Down(8, 16)
+        self.down2 = Down(16, 32)
+        self.down3 = Down(32, 64)
+        self.down4 = Down(64, 64)
+        self.up1 = Up(128, 32)
+        self.up2 = Up(64, 16)
+        self.up3 = Up(32, 8)
+        self.up4 = Up(16, 4)
+        self.outc = OutConv(4, classes)
 
     def forward(self, x):
         x1 = self.inc(x)

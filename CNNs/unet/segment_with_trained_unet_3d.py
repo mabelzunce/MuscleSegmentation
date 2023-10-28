@@ -22,7 +22,7 @@ modelName = os.listdir(modelLocation)[0]
 modelFilename = modelLocation + modelName
 
 ######################### CHECK DEVICE ######################
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cpu')
 print(device)
 if device.type == 'cuda':
     t = torch.cuda.get_device_properties(0).total_memory
@@ -62,5 +62,6 @@ for filename in files:
         output = ((output > 0.5) * 1)
         output = multilabel(output.detach().numpy())
     output = FilterUnconnectedRegions(output.squeeze(0), multilabelNum, sitkImage)# Herramienta de filtrado de imagenes
+    print(name)
     sitk.WriteImage(output, outputPath + name + '_segmentation' + extension)
     #writeMhd(output.squeeze(0).astype(np.uint8), outputPath + name + '_segmentation' + extension, sitkImage) # sin herramienta de filtrado
