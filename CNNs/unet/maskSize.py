@@ -5,10 +5,10 @@ import os
 from utils import maskSize
 
 
-dataPath ='../../Data/LumbarSpine3D/InputImages/'
-outputPath ='../../Data/LumbarSpine3D/'
+dataPath ='/media/german/SSD Externo/1LumbarSpineDixonData/'
+outputPath ='/media/german/SSD Externo/LumbarSpineDixonDataResampled/'
 
-muscleNames = ['Left Psoas','Left Iliacus','Left Quadratus','Left Multifidus','Right Psoas','Right Iliacus','Right Quadratus','Right Multifidus']
+muscleNames = ['Left P','Left I','Left QL','Left ES+M','Right P','Right I','Right QL','Right ES+M']
 folder = os.listdir(dataPath)
 folder = sorted(folder)
 tagMask = '_seg.mhd'

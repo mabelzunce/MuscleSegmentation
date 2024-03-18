@@ -22,7 +22,7 @@ modelName = os.listdir(modelLocation)[0]
 modelFilename = modelLocation + modelName
 
 ######################### CHECK DEVICE ######################
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cpu')
 print(device)
 if device.type == 'cuda':
     t = torch.cuda.get_device_properties(0).total_memory
@@ -33,10 +33,10 @@ if device.type == 'cuda':
 
 ######################### MODEL INIT ######################
 multilabelNum = 8
-torch.cuda.empty_cache()
 model = Unet(1, multilabelNum)
 model.load_state_dict(torch.load(modelFilename, map_location=device))
 model = model.to(device)
+model.eval()
 
 ###################### READ DATA AND PRE PROCESS IT FOR TRAINING DATA SETS #####################################################
 # Look for the folders or shortcuts:
@@ -46,6 +46,7 @@ imageNames = []
 imageFilenames = []
 i = 0
 for filename in files:
+    #torch.cuda.empty_cache()
     name, extension = os.path.splitext(filename)
     if extension.endswith('raw'):
         continue
@@ -61,6 +62,11 @@ for filename in files:
         outputs = maxProb(output, multilabelNum)
         output = ((output > 0.5) * 1)
         output = multilabel(output.detach().numpy())
+        t = torch.cuda.get_device_properties(0).total_memory / 1024**3
+        r = torch.cuda.memory_reserved(0)/1024**3
+        a = torch.cuda.memory_allocated(0)/1024**3
+        f = r - a / 1024**3 # free inside reserved
+        print('Total memory: {0}. Reserved memory: {1}. Allocated memory:{2}. Free memory:{3}.'.format(t, r, a, f))
     output = FilterUnconnectedRegions(output.squeeze(0), multilabelNum, sitkImage)# Herramienta de filtrado de imagenes
     sitk.WriteImage(output, outputPath + name + '_segmentation' + extension)
     #writeMhd(output.squeeze(0).astype(np.uint8), outputPath + name + '_segmentation' + extension, sitkImage) # sin herramienta de filtrado

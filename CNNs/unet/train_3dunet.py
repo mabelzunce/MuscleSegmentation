@@ -120,6 +120,10 @@ match AugmentedTrainingSet:
 
 k = 0
 j = 0
+condition1 = False
+condition2 = False
+trainingSetFiles = []
+validSetFiles = []
 # Data set avoids mixing same subject images
 for i in range(0, datasize):
     name1, name2 = atlasNames[i].split('_')[:2]
@@ -136,36 +140,16 @@ for i in range(0, datasize):
 
     condition2 = (validSubjects.__contains__(name1)) and (name2 == name1)
 
-    atlasImage = sitk.ReadImage(atlasImageFilenames[i])
-    atlasLabels = sitk.ReadImage(atlasLabelsFilenames[i])
-
-    trainingSetShape = [tNum, atlasImage.GetSize()[2], atlasImage.GetSize()[1], atlasImage.GetSize()[0]]
-    validSetShape = [vNum, atlasImage.GetSize()[2], atlasImage.GetSize()[1], atlasImage.GetSize()[0]]
-
-    if i == 0:
-        imagesTrainingSet = np.zeros(trainingSetShape)
-        labelsTrainingSet = np.zeros(trainingSetShape)
-        imagesValidSet = np.zeros(validSetShape)
-        labelsValidSet = np.zeros(validSetShape)
-        # Size of each 2d image:
-        dataSetImageSize_voxels = imagesTrainingSet.shape[1:4]  # obtiene el getsize[1 y 0]
-
     if condition1:
-        imagesTrainingSet[k, :, :, :] = np.reshape(sitk.GetArrayFromImage(atlasImage), [1, atlasImage.GetSize()[2], atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
-        labelsTrainingSet[k, :, :, :] = np.reshape(sitk.GetArrayFromImage(atlasLabels), [1, atlasImage.GetSize()[2], atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
-        k += 1
+        trainingSetFiles.append([atlasImageFilenames[i], atlasLabelsFilenames[i]])
 
     if condition2:
-        imagesValidSet[j, :, :, :] = np.reshape(sitk.GetArrayFromImage(atlasImage), [1, atlasImage.GetSize()[2], atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
-        labelsValidSet[j, :, :, :] = np.reshape(sitk.GetArrayFromImage(atlasLabels), [1, atlasImage.GetSize()[2], atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
-        j += 1
+        validSetFiles.append([atlasImageFilenames[i], atlasLabelsFilenames[i]])
 
-if saveDataSetMhd:
-    writeMhd(imagesTrainingSet.astype(np.float32), outputPath + 'images_training_set.mhd')
-    writeMhd(labelsTrainingSet.astype(np.uint8), outputPath + 'labels_training_set.mhd')
-    writeMhd(imagesValidSet.astype(np.float32), outputPath + 'images_valid_set.mhd')
-    writeMhd(labelsValidSet.astype(np.uint8), outputPath + 'labels_valid_set.mhd')
+
 # Initialize numpy array and read data:
+print(trainingSetFiles)
+
 print("Number of atlases images: {0}".format(len(atlasNames)))
 print("List of atlases: {0}\n".format(atlasNames))
 
@@ -257,7 +241,7 @@ torch.cuda.empty_cache()
 unet.to(device)
 for epoch in range(200):  # loop over the dataset multiple times
     epochNumbers.append(epoch)
-    if saveMhd:
+    #if saveMhd:
         outputTrainingSet = np.zeros(trainingSetShape)
         outputValidSet = np.zeros(validSetShape)
         if DEBUG:
