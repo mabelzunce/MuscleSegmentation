@@ -128,6 +128,7 @@ def maxProb(image, numlabels):
         outImage[:, k, :, :] = image[:, k, :, :] * (indexImage == k)
     return outImage
 
+
 def multilabel(image,Background = False):
     numLabels = image.shape[1]
     shape = image.shape
@@ -136,13 +137,13 @@ def multilabel(image,Background = False):
     outImage = np.zeros(shape)
     for k in range(numLabels):
         if Background:
-            outImage = outImage + image[:, k, :, :, :] * k
+            outImage = outImage + image[:, k, :, :] * k
         else:
-            outImage = outImage + image[:, k, :, :, :] * (k + 1)
+            outImage = outImage + image[:, k, :, :] * (k + 1)
     return outImage
 
 def maskSize(image):
-    numLabels = np.max(image)
+    numLabels = np.max(image).astype(np.uint8)
     outArray = []
     for k in range(numLabels):
         auximage = (image == k+1)
@@ -250,7 +251,6 @@ def boxplot(data, xlabel, outpath, yscale, title):
     plt.boxplot(data, labels=xlabel)
     plt.title(title)
     plt.ylim(yscale)
-    #plt.ylabel('Score')
     plt.savefig(outpath)
     plt.close()
 

@@ -4,17 +4,17 @@ import csv
 import os
 
 
-dataPath = 'D:/1LumbarSpineDixonData/3D Images Resampled/'
+dataPath = 'D:/1LumbarSpineDixonData/2D Images/'
 outputPath = 'D:/1LumbarSpineDixonData/'
 
-muscleNames = ['Left P','Left I','Left QL','Left ES+M','Right P','Right I','Right QL','Right ES+M','Avg']
+muscleNames = ['Left Multifidus','Right Multifidus','Left Quadratus','Right Quadratus','Left Psoas','Right Psoas','Avg']
 folder = os.listdir(dataPath)
 folder = sorted(folder)
-tagFatFraction = '_ff.mhd'
+tagFatFraction = '_FF.mhd'
 tagMask = '_seg.mhd'
 auxName = str
 
-with open(outputPath + 'fatfraction3d.csv',mode='w', newline="") as csv_file:
+with open(outputPath + 'fatfraction.csv',mode='w', newline="") as csv_file:
     csv_writer = csv.writer(csv_file)
     header = list(('subject', *muscleNames))
     csv_writer.writerow(header)
@@ -26,7 +26,6 @@ with open(outputPath + 'fatfraction3d.csv',mode='w', newline="") as csv_file:
             mask = sitk.ReadImage(dataPath + auxName + tagMask)
         else:
             continue
-        print(auxName)
         maskMaxValue = np.max(sitk.GetArrayViewFromImage(mask)).astype(np.uint8)
         fatFraction = []
         for n in range(maskMaxValue):

@@ -8,7 +8,6 @@ outputPath = '../../Data/LumbarSpine3D/'
 folder = sorted(os.listdir(dataPath))
 
 extensionImages = '.mhd'
-suffixArray = ['_F', '_I', '_O', '_W']
 inPhaseSuffix = '_I'
 outOfPhaseSuffix = '_O'
 waterSuffix = '_W'
@@ -26,5 +25,4 @@ for files in folder:
     waterfatImage = sitk.Add(fatImage, waterImage)
     fatfractionImage = sitk.Divide(fatImage, waterfatImage)
     fatfractionImage = sitk.Cast(sitk.Mask(fatfractionImage, waterfatImage > 0, outsideValue=0, maskingValue=0), sitk.sitkFloat32)
-
     sitk.WriteImage(fatfractionImage, outputPath + auxName + '_ff' + extensionImages)

@@ -6,7 +6,8 @@ import numpy as np
 datapath = '..\\..\\Data\\ModelDiff\\WeightDiff\\'
 
 Weight = ['None', 'Standard', 'Relative']
-muscleNames = ['LM', 'LP', 'LQ', 'RM', 'RP', 'RQ']
+weightAux = ['Sin Pesaje', 'Estándar', 'Relativo']
+muscleNames = ['$ES+M_i$', '$ES+M_d$', '$CL_i$', '$CL_d$', '$P_i$', '$P_d$']
 Folders = [datapath + Weight[0], datapath + Weight[1], datapath + Weight[2]]
 
 DiceValues = [[] for n in range(len(Weight))]
@@ -54,17 +55,15 @@ ax.bar(pos3, y_values3, width=bar_width, label=muscleNames[2], color='sandybrown
 ax.bar(pos4, y_values4, width=bar_width, label=muscleNames[3], color='khaki')
 ax.bar(pos5, y_values5, width=bar_width, label=muscleNames[4], color='yellowgreen')
 ax.bar(pos6, y_values6, width=bar_width, label=muscleNames[5], color='steelblue')
-ax.bar(pos7, y_values7, width=bar_width, label='Average', color='black')
+ax.bar(pos7, y_values7, width=bar_width, label='Promedio', color='black')
 
 ax.set_xticks(pos4)
-ax.set_xticklabels(Weight)
+ax.set_xticklabels(weightAux)
 
 
-ax.set_title('Validation Dice Scores')
-ax.set_xlabel('Weight')
-ax.set_ylabel('Score')
+ax.set_title('Puntaje Dice en Set de Validación')
 ax.set_ylim(0.85, 1)  # Set the lower and upper bounds of the y-axis
 ax.legend()
 
-plt.savefig(datapath + 'WeightDiff.png')
+plt.savefig(datapath + 'WeightDiff.tiff')
 

@@ -4,17 +4,17 @@ import csv
 import os
 
 
-dataPath = 'D:/1LumbarSpineDixonData/3D Images Resampled/'
-outputPath = 'D:/1LumbarSpineDixonData/'
+dataPath = 'D:/1LumbarSpineDixonData/2D Images/'
+outputPath = 'D:/Resultados Antropometricos CSV/'
 
-muscleNames = ['Left P','Left I','Left QL','Left ES+M','Right P','Right I','Right QL','Right ES+M','Avg']
+muscleNames = ['ES+M Izq','ES+M Der','CL Izq','CL Der','P Izq','P Der','Promedio']
 folder = os.listdir(dataPath)
 folder = sorted(folder)
-tagFatFraction = '_ff.mhd'
+tagInPhase = '_I.mhd'
 tagMask = '_seg.mhd'
 auxName = str
 
-with open(outputPath + 'fatfraction3d.csv',mode='w', newline="") as csv_file:
+with open(outputPath + 'csa_1.csv',mode='w', newline="") as csv_file:
     csv_writer = csv.writer(csv_file)
     header = list(('subject', *muscleNames))
     csv_writer.writerow(header)
@@ -22,19 +22,19 @@ with open(outputPath + 'fatfraction3d.csv',mode='w', newline="") as csv_file:
         name = os.path.splitext(files)[0]
         if name.split('_')[0] != auxName:
             auxName = name.split('_')[0]
-            ffImage = sitk.ReadImage(dataPath + auxName + tagFatFraction)
+            ipImage = sitk.ReadImage(dataPath + auxName + tagInPhase)
             mask = sitk.ReadImage(dataPath + auxName + tagMask)
         else:
             continue
-        print(auxName)
+        imageSpacing = ipImage.GetSpacing()
+        pixelSize = np.product(imageSpacing)
         maskMaxValue = np.max(sitk.GetArrayViewFromImage(mask)).astype(np.uint8)
-        fatFraction = []
+        CSA = []
         for n in range(maskMaxValue):
             binaryMask = sitk.BinaryThreshold(mask, n+1,n+1,1,0)
             maskSize = np.sum(sitk.GetArrayViewFromImage(binaryMask))
-            segmentedFF = sitk.Mask(ffImage, binaryMask)
-            ffSum = np.sum(sitk.GetArrayViewFromImage(segmentedFF))
-            fatFraction.append(ffSum/maskSize)
-        csvRow = (auxName, *fatFraction, np.mean(fatFraction))
+            CSA.append((maskSize * pixelSize)/100)
+
+        csvRow = (auxName, *CSA, np.mean(CSA))
         csvRow = list(csvRow)
         csv_writer.writerow(csvRow)

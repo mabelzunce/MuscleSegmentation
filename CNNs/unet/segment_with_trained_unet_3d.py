@@ -68,5 +68,6 @@ for filename in files:
         f = r - a / 1024**3 # free inside reserved
         print('Total memory: {0}. Reserved memory: {1}. Allocated memory:{2}. Free memory:{3}.'.format(t, r, a, f))
     output = FilterUnconnectedRegions(output.squeeze(0), multilabelNum, sitkImage)# Herramienta de filtrado de imagenes
+    print(name)
     sitk.WriteImage(output, outputPath + name + '_segmentation' + extension)
     #writeMhd(output.squeeze(0).astype(np.uint8), outputPath + name + '_segmentation' + extension, sitkImage) # sin herramienta de filtrado
