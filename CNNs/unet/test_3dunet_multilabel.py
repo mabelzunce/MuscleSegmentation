@@ -34,9 +34,14 @@ Background = False       # Background is considered as label
 Boxplot = True           # Boxplot created in every best fit
 AugmentedTrainingSet = Augment.NA
 ############################ DATA PATHS ##############################################
-trainingSetPath = '../../Data/LumbarSpine3D/Registered&ResampledData/'
-outputPath = '../../Data/LumbarSpine3D/model/'
+trainingSetPath = '../../Data/LumbarSpine3D/ResampledData/'
+outputPath = '../../Data/LumbarSpine3D/modelTestResults/'
 modelLocation = '../../Data/LumbarSpine3D/PretrainedModel/'
+trainingSubjects = '../../Data/LumbarSpine3D/trainingSubjects/'
+validSubjects = '../../Data/LumbarSpine3D/validSubjects/'
+
+trainingTxt = trainingSubjects + os.listdir(trainingSubjects)[0]
+validTxt = validSubjects + os.listdir(validSubjects)[0]
 
 modelName = os.listdir(modelLocation)[0]
 unetFilename = modelLocation + modelName
@@ -64,7 +69,7 @@ trainingSetRelSize = 0.7
 devSetRelSize = 1 - trainingSetRelSize
 
 ######################### CHECK DEVICE ######################
-device = torch.device('cpu')
+device = torch.device('cuda:1')
 print(device)
 
 ###################### READ DATA AND PRE PROCESS IT FOR TRAINING DATA SETS #####################################################
@@ -110,8 +115,18 @@ for filename in files:
 
 tNum = int(np.floor(numSubjects * trainingSetRelSize))
 vNum = int(np.ceil(numSubjects * devSetRelSize))
-trainingSubjects = subjects[:tNum]
-validSubjects = subjects[tNum:]
+
+textFile = open(trainingTxt,'r')
+trainingSubjects = textFile.readlines()
+trainingSubjects = [s.replace('\n', '') for s in trainingSubjects]
+textFile.close()
+
+textFile = open(validTxt,'r')
+validSubjects = textFile.readlines()
+validSubjects = [s.replace('\n', '') for s in validSubjects]
+textFile.close()
+
+
 match AugmentedTrainingSet:
     case 1:
         tNum = (tNum * tNum)
@@ -119,7 +134,6 @@ match AugmentedTrainingSet:
         tNum = (numRot * tNum)
     case 3:
         tNum = (tNum + numRot) * tNum
-
 k = 0
 j = 0
 # Data set avoids mixing same subject images

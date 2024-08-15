@@ -31,7 +31,7 @@ saveDataSetMhd = False  # Saves a Mhd file of the images and labels from dataset
 LoadModel = False      # Pretrained model
 Background = False        # Background is considered as label
 Boxplot = True           # Boxplot created in every best fit
-AugmentedTrainingSet = Augment.L
+AugmentedTrainingSet = Augment.NA
 ############################ DATA PATHS ##############################################
 trainingSetPath = '../../Data/LumbarSpine3D/TrainingSetAugmentedLinear/'
 outputPath = '../../Data/LumbarSpine3D/model/'
@@ -232,8 +232,8 @@ gtDevSet = torch.from_numpy(devSet['output'])
 # Train
 best_vloss = 1
 
-skip_plot = 50             # early epoch loss values tend to hide later values
-skip_model = 50            # avoids saving dataset images for the early epochs
+skip_plot = 100             # early epoch loss values tend to hide later values
+skip_model = 100           # avoids saving dataset images for the early epochs
 
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
@@ -255,7 +255,7 @@ deviter = 0
 
 torch.cuda.empty_cache()
 unet.to(device)
-for epoch in range(200):  # loop over the dataset multiple times
+for epoch in range(400):  # loop over the dataset multiple times
     epochNumbers.append(epoch)
     if saveMhd:
         outputTrainingSet = np.zeros(trainingSetShape)
