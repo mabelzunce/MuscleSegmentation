@@ -4,6 +4,9 @@ import numpy as np
 import os
 import math
 from datetime import datetime
+
+from sympy import false
+
 from utils import create_csv
 from utils import dice2d
 from utils import specificity
@@ -137,19 +140,10 @@ match AugmentedTrainingSet:
 k = 0
 j = 0
 # Data set avoids mixing same subject images
+flag = True
 for i in range(0, datasize):
     #name1, name2 = atlasNames[i].split('_')[:1]
-    match AugmentedTrainingSet:
-        case 0:
-            condition1 = (trainingSubjects.__contains__(atlasNames[i]))
-        case 1:
-            condition1 = (trainingSubjects.__contains__(name1)) and (trainingSubjects.__contains__(name2))
-        case 2:
-            conditionAux = trainingSubjects.__contains__(name2) or validSubjects.__contains__(name2)
-            condition1 = ((trainingSubjects.__contains__(name1)) and not conditionAux)
-        case 3:
-            condition1 = (trainingSubjects.__contains__(name1)) and (not (validSubjects.__contains__(name2)))
-
+    condition1 = (trainingSubjects.__contains__(atlasNames[i]))
     condition2 = (validSubjects.__contains__(atlasNames[i]))
 
     atlasImage = sitk.ReadImage(atlasImageFilenames[i])
@@ -169,33 +163,13 @@ for i in range(0, datasize):
     if condition1:
         imagesTrainingSet[k, :, :, :] = np.reshape(sitk.GetArrayFromImage(atlasImage),[1, atlasImage.GetSize()[2], atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
         labelsTrainingSet[k, :, :, :] = np.reshape(sitk.GetArrayFromImage(atlasLabel), [1, atlasImage.GetSize()[2], atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
-        if i==0:
-            auximagesTrainingSet = sitk.GetArrayFromImage(atlasImage)
-            auxlabelsTrainingSet = sitk.GetArrayFromImage(atlasLabel)
-            flag = True
-        else:
-            auximagesTrainingSet = np.append(auximagesTrainingSet, sitk.GetArrayFromImage(atlasImage), axis=0)
-            auxlabelsTrainingSet = np.append(auxlabelsTrainingSet, sitk.GetArrayFromImage(atlasLabel), axis=0)
         k += 1
 
     if condition2:
-        if flag:
-            auximagesValidSet = sitk.GetArrayFromImage(atlasImage)
-            auxlabelsValidSet = sitk.GetArrayFromImage(atlasLabel)
-            flag = False
-        else:
-            auximagesValidSet = np.append(auximagesValidSet, sitk.GetArrayFromImage(atlasImage), axis=0)
-            auxlabelsValidSet = np.append(auxlabelsValidSet, sitk.GetArrayFromImage(atlasLabel), axis=0)
-
         imagesValidSet[j, :, :, :] = np.reshape(sitk.GetArrayFromImage(atlasImage), [1, atlasImage.GetSize()[2], atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
         labelsValidSet[j, :, :, :] = np.reshape(sitk.GetArrayFromImage(atlasLabel), [1, atlasImage.GetSize()[2], atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
         j += 1
 
-if saveDataSetMhd:
-    writeMhd(auximagesTrainingSet, outputPath + 'TrainingImages.mhd')
-    writeMhd(auxlabelsTrainingSet, outputPath + 'TrainingLabels.mhd')
-    writeMhd(auximagesValidSet, outputPath + 'ValidImages.mhd')
-    writeMhd(auxlabelsValidSet, outputPath + 'ValidLabels.mhd')
 # Initialize numpy array and read data:
 print("Number of atlases images: {0}".format(len(atlasNames)))
 print("List of atlases: {0}\n".format(atlasNames))
