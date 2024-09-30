@@ -12,6 +12,7 @@ from utils import dice2d
 from utils import specificity
 from utils import sensitivity
 from utils import precision
+from utils import haus_distance
 from utils import maxProb
 from utils import writeMhd
 from utils import multilabel
@@ -209,7 +210,7 @@ else:
     criterion = nn.BCEWithLogitsLoss()
 
 unet = Unet(1, multilabelNum)
-unet.load_state_dict(torch.load(unetFilename, map_location=device))
+unet.load_state_dict(torch.load(unetFilename, map_location=device,weights_only=True))
 total_params = sum(p.numel() for p in unet.parameters())
 print("Total Parameters: " + str(total_params))
 #tensorGroundTruth.shape
@@ -275,6 +276,12 @@ precValid = [[] for n in range(multilabelNum)]
 precTrainingEpoch = [[] for n in range(multilabelNum)]
 precValidEpoch = [[] for n in range(multilabelNum)]
 
+hausTraining = [[] for n in range(multilabelNum)]
+hausValid= [[] for n in range(multilabelNum)]
+
+hausTrainingEpoch = [[] for n in range(multilabelNum)]
+hausValidEpoch = [[] for n in range(multilabelNum)]
+
 #### TRAINING ####
 
 unet.train(False)
@@ -318,10 +325,12 @@ for i in range(numBatches):
                 specScore = specificity(lbl, seg)
                 sensScore = sensitivity(lbl, seg)
                 precScore = precision(lbl, seg)
+                #hausScore = haus_distance(lbl,seg)
                 diceTraining[j].append(diceScore)
                 specTraining[j].append(specScore)
                 sensTraining[j].append(sensScore)
                 precTraining[j].append(precScore)
+                #hausTraining[j].append(hausScore)
 
 for j in range(multilabelNum):
     diceTrainingEpoch[j].append(np.mean(diceTraining[j]))
@@ -373,15 +382,18 @@ for i in range(devNumBatches):
             specScore = specificity(lbl, seg)
             sensScore = sensitivity(lbl, seg)
             precScore = precision(lbl, seg)
+            hausScore = haus_distance(lbl,seg)
             diceValid[j].append(diceScore)
             specValid[j].append(specScore)
             sensValid[j].append(sensScore)
             precValid[j].append(precScore)
+            hausValid[j].append(hausScore)
 for j in range(multilabelNum):
     diceValidEpoch[j].append(np.mean(diceValid[j]))
     specValidEpoch[j].append(np.mean(specValid[j]))
     sensValidEpoch[j].append(np.mean(sensValid[j]))
     precValidEpoch[j].append(np.mean(precValid[j]))
+    hausValidEpoch[j].append(np.mean(hausValid[j]))
     print('Valid Dice Score:  %f ' % np.mean(diceValid[j]))
 
 avg_vloss = np.mean(lossValuesDevSetEpoch)
@@ -393,6 +405,7 @@ for k in range(multilabelNum):
     create_csv(sensValid[k], outputPath + 'Test_ValidSensitivity_' + labelNames[k] + '.csv')
     create_csv(specValid[k], outputPath + 'Test_ValidSpecificity_' + labelNames[k] + '.csv')
     create_csv(precValid[k], outputPath + 'Test_ValidPrecision_' + labelNames[k] + '.csv')
+    create_csv(hausValid[k], outputPath + 'Test_ValidHaus_' + labelNames[k] + '.csv')
 
 
 
