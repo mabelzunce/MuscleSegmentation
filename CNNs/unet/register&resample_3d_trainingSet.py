@@ -11,7 +11,7 @@ from utils import swap_labels
 ############################### CONFIGURATION #####################################
 DEBUG = 0 # In debug mode, all the intermediate iamges are written.
 USE_COSINES_AND_ORIGIN = 1
-
+scaleFactor = [2,2,2]
 ############################## REGISTRATION PARAMETER FILES ######################
 similarityMetricForReg = 'NMI'
 parameterFilesPath = '../../Data/Elastix/'
@@ -21,6 +21,8 @@ paramFileAffine = 'Parameters_Affine_' + similarityMetricForReg
 
 dataPath = '../../Data/LumbarSpine3D/RawData/' # Base data path.
 outputPath = '../../Data/LumbarSpine3D/Regstered&ResampledData/' # Base data path.
+dataPath = "/home/martin/data_imaging/Muscle/GlutealSegmentations/PelvisFOV/ManualSegmentations/Mhd/"
+outputPath = "/home/martin/data_imaging/Muscle/GlutealSegmentations/PelvisFOV/ManualSegmentations/MhdRegisteredDownsampled/"
 if not os.path.exists(outputPath):
     os.makedirs(outputPath)
 # Get the atlases names and files:
@@ -31,7 +33,7 @@ data = sorted(data)
 extensionShortcuts = 'lnk'
 strForShortcut = '-> '
 extensionImages = 'mhd'
-tagInPhase = '_I'
+tagInPhase = ''
 tagAutLabels = '_aut'
 tagManLabels = '_labels'
 atlasNames = [] # Names of the atlases
@@ -51,7 +53,7 @@ for filename in data:
     # Check if filename is the in phase header and the labels exists:
     filenameImages = dataPath + atlasName + tagInPhase + '.' + extensionImages
     filenameManLabels = dataPath + atlasName + tagManLabels + '.' + extensionImages
-    if name.endswith(tagInPhase) and extension.endswith(extensionImages) and os.path.exists(filenameManLabels):
+    if name.endswith(tagManLabels) and extension.endswith(extensionImages) and os.path.exists(filenameImages):
         #\ and (atlasName not in atlasNamesImplantOrNotGood):
         # Atlas name:
         atlasNames.append(atlasName)
@@ -65,9 +67,39 @@ print("List of atlases: {0}\n".format(atlasNames))
 
 
 ################################### REFERENCE IMAGE FOR THE REGISTRATION #######################
-indexReference = 10
+# Get all the iamge size:
+allImageSize_mm = np.zeros([len(atlasNames),3])
+for i in range(0, len(atlasNames)):
+    reader = sitk.ImageFileReader()
+    reader.SetFileName(atlasImageFilenames[i])
+    reader.ReadImageInformation()
+    # Get size
+    size = reader.GetSize()
+    dims = reader.GetDimension()
+    voxelSize_mm = reader.GetSpacing()
+    # Get maximum length in each
+    allImageSize_mm[i, :] = np.multiply(size, voxelSize_mm)
+
+indexReference= np.argmax(allImageSize_mm[:,2])
+#indexReference = 10
 referenceSliceImage = sitk.ReadImage(atlasImageFilenames[indexReference])    #Es una Reference image no un Reference slice image
 print('Reference image: {0}. Voxel size: {1}'.format(atlasImageFilenames[indexReference], referenceSliceImage.GetSize()))
+# Downsample the reference image:
+# resampled_image.SetDirection(direction)
+# Resample images:
+original_spacing = referenceSliceImage.GetSpacing()
+original_size = referenceSliceImage.GetSize()
+origin = referenceSliceImage.GetOrigin()
+direction = referenceSliceImage.GetDirection()
+
+new_spacing = np.multiply(original_spacing, scaleFactor).tolist()
+new_size = np.divide(original_size, scaleFactor).astype(np.uint32).tolist()
+
+resampler = sitk.ResampleImageFilter()
+resampler.SetSize(new_size)
+resampler.SetOutputSpacing(new_spacing)
+resampler.SetOutputOrigin(origin)
+referenceSliceImage = resampler.Execute(referenceSliceImage)
 
 ################################### READ IMAGES, EXTRACT SLICES AND REGISTER IMAGES TO THE REFERENCE ########################################
 for i in range(0, len(atlasNames)):
@@ -105,28 +137,9 @@ for i in range(0, len(atlasNames)):
     transformixImageFilter.Execute()
     atlasManLabel = sitk.Cast(transformixImageFilter.GetResultImage(), sitk.sitkUInt8)
 
-    # Resample images:
-    original_spacing = atlasImage.GetSpacing()
-    original_size = atlasImage.GetSize()
-    origin = atlasImage.GetOrigin()
-    direction = atlasImage.GetDirection()
-
-    new_spacing = [spc * 2 for spc in original_spacing]
-    new_spacing[2] = original_spacing[2]
-    new_size = [int(sz / 2) for sz in original_size]
-    new_size[2] = original_size[2]
-
-    #resampled_image.SetDirection(direction)
-    resampler = sitk.ResampleImageFilter()
-    resampler.SetSize(new_size)
-    resampler.SetOutputSpacing(new_spacing)
-    resampler.SetOutputOrigin(origin)
-    resampled_image = resampler.Execute(atlasImage)
-    resampler.SetInterpolator(sitk.sitkNearestNeighbor)
-    resampled_label = resampler.Execute(atlasManLabel)
     # write the 3d images:
-    sitk.WriteImage(resampled_image, outputPath + atlasNames[i] + '.' + extensionImages)
-    sitk.WriteImage(resampled_label, outputPath + atlasNames[i] + tagManLabels + '.' + extensionImages)
+    sitk.WriteImage(atlasImage, outputPath + atlasNames[i] + '.' + extensionImages, True)
+    sitk.WriteImage(atlasManLabel, outputPath + atlasNames[i] + tagManLabels + '.' + extensionImages, True)
     # Show images:
     if DEBUG:
         slice = sitk.GetArrayFromImage(atlasImage)

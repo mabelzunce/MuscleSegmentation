@@ -21,6 +21,8 @@ paramFileAffine = 'Parameters_Affine_' + similarityMetricForReg
 
 dataPath = '../../Data/LumbarSpine3D/RawData/' # Base data path.
 outputPath = '../../Data/LumbarSpine3D/ResampledData/' # Base data path.
+dataPath = '/home/martin/data_imaging/Muscle/GlutealSegmentations/PelvisFOV/ManualSegmentations/Mhd/'# Base data path.
+outputPath = '/home/martin/data_imaging/Muscle/GlutealSegmentations/PelvisFOV/ManualSegmentations/MhdRegistered/'# Base data path.
 if not os.path.exists(outputPath):
     os.makedirs(outputPath)
 # Get the atlases names and files:
@@ -31,7 +33,7 @@ data = sorted(data)
 extensionShortcuts = 'lnk'
 strForShortcut = '-> '
 extensionImages = 'mhd'
-tagInPhase = '_I'
+tagInPhase = ''
 tagAutLabels = '_aut'
 tagManLabels = '_labels'
 atlasNames = [] # Names of the atlases
@@ -51,7 +53,7 @@ for filename in data:
     # Check if filename is the in phase header and the labels exists:
     filenameImages = dataPath + atlasName + tagInPhase + '.' + extensionImages
     filenameManLabels = dataPath + atlasName + tagManLabels + '.' + extensionImages
-    if name.endswith(tagInPhase) and extension.endswith(extensionImages) and os.path.exists(filenameManLabels):
+    if name.endswith(tagManLabels) and extension.endswith(extensionImages) and os.path.exists(filenameImages):
         #\ and (atlasName not in atlasNamesImplantOrNotGood):
         # Atlas name:
         atlasNames.append(atlasName)

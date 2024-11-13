@@ -21,6 +21,8 @@ paramFileAffine = 'Parameters_Affine_' + similarityMetricForReg
 
 dataPath = '../../Data/LumbarSpine3D/InputImages/'# Base data path.
 outputPath = '../../Data/LumbarSpine3D/InputImages/' # Base data path.
+dataPath = '/home/martin/data_imaging/Muscle/GlutealSegmentations/PelvisFOV/ManualSegmentations/MhdRegistered/' #
+outputPath = '/home/martin/data_imaging/Muscle/GlutealSegmentations/PelvisFOV/ManualSegmentations/MhdRegisteredDownsampled/' #
 if not os.path.exists(outputPath):
     os.makedirs(outputPath)
 # Get the atlases names and files:
@@ -31,7 +33,7 @@ data = sorted(data)
 extensionShortcuts = 'lnk'
 strForShortcut = '-> '
 extensionImages = 'mhd'
-tagInPhase = '_FF'
+tagInPhase = ''
 
 atlasNames = [] # Names of the atlases
 atlasImageFilenames = [] # Filenames of the intensity images
@@ -93,7 +95,7 @@ for i in range(0, len(atlasNames)):
 
     # write the 3d images:
     resampled_image = sitk.Cast(resampled_image, sitk.sitkFloat32)
-    sitk.WriteImage(resampled_image, outputPath + atlasNames[i] + '_ff.' + extensionImages)
+    sitk.WriteImage(resampled_image, outputPath + atlasNames[i] + '_ff.' + extensionImages, True)
 
     # Show images:
     if DEBUG:
