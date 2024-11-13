@@ -6,6 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import csv
 
+#from MultiAtlasSegmenter.MultiAtlasSegmentation.EvaluateSegmentation import hausdorff_distance_filter
 
 
 def imshow_from_torch(img, imin=0, imax=1, ialpha = 1, icmap='gray'):
@@ -44,7 +45,7 @@ def create_csv(vector, outpath):
     if "Dice" in outpath:
         header.append("Dice")
     else:
-        header.append("Loss")
+        header.append("Score")
     with open(outpath, 'w', newline='', encoding='UTF8') as file:
         writer = csv.writer(file)
         writer.writerow(header)
@@ -108,7 +109,6 @@ def precision(label, segmented):
         score = 0
     return score
 
-
 def specificity(label, segmented):
     if label.shape != segmented.shape:
         print('Error: shape')
@@ -119,6 +119,38 @@ def specificity(label, segmented):
     fp = (segmented * ~label) * 1
     score = tn.sum() / (tn.sum() + fp.sum())
     return score
+
+def hausdorff_distance(A, B):
+    def point_to_set_distance(point, set_points):
+        return np.min(np.linalg.norm(set_points - point, axis=1))
+
+    def set_to_set_distance(set1, set2):
+        return np.max([point_to_set_distance(point, set2) for point in set1])
+
+    return max(set_to_set_distance(A, B), set_to_set_distance(B, A))
+
+def hausdorff(label, segmented):
+    if label.shape != segmented.shape:
+        print('Error: shape')
+        return 0
+    label = sitk.Cast(sitk.GetImageFromArray(label),sitk.sitkFloat32)
+    label_edge = sitk.GetArrayFromImage(sitk.SobelEdgeDetection(label))
+    segmented = sitk.Cast(sitk.GetImageFromArray(segmented),sitk.sitkFloat32)
+    segmented_edge = sitk.GetArrayFromImage(sitk.SobelEdgeDetection(segmented))
+    distance = hausdorff_distance(segmented_edge,label_edge)
+    return distance
+
+def haus_distance(label,segmented):
+    if label.shape != segmented.shape:
+        print('Error: shape')
+        return 0
+    label = sitk.Cast(sitk.GetImageFromArray(label),sitk.sitkFloat32)
+    segmented = sitk.Cast(sitk.GetImageFromArray(segmented),sitk.sitkFloat32)
+    haus_filter = sitk.HausdorffDistanceImageFilter()
+    haus_filter.Execute(label, segmented)
+    return haus_filter.GetHausdorffDistance()
+
+
 
 
 def maxProb(image, numlabels):
@@ -253,7 +285,6 @@ def boxplot(data, xlabel, outpath, yscale, title):
     plt.ylim(yscale)
     plt.savefig(outpath)
     plt.close()
-
 
 # PyTorch
 class DiceLoss(nn.Module):

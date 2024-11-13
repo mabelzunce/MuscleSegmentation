@@ -31,9 +31,9 @@ saveDataSetMhd = False  # Saves a Mhd file of the images and labels from dataset
 LoadModel = False      # Pretrained model
 Background = False        # Background is considered as label
 Boxplot = True           # Boxplot created in every best fit
-AugmentedTrainingSet = Augment.NA
+AugmentedTrainingSet = Augment.A
 ############################ DATA PATHS ##############################################
-trainingSetPath = '../../Data/LumbarSpine3D/TrainingSetAugmentedLinear/'
+trainingSetPath = '../../Data/LumbarSpine3D/TrainingSet/'
 outputPath = '../../Data/LumbarSpine3D/model/'
 modelLocation = '../../Data/LumbarSpine3D/PretrainedModel/'
 
@@ -64,7 +64,7 @@ trainingSetRelSize = 0.7
 devSetRelSize = 1 - trainingSetRelSize
 
 ######################### CHECK DEVICE ######################
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
 print(device)
 
 ###################### READ DATA AND PRE PROCESS IT FOR TRAINING DATA SETS #####################################################
@@ -108,8 +108,13 @@ for filename in files:
 
 tNum = int(np.floor(numSubjects * trainingSetRelSize))
 vNum = int(np.ceil(numSubjects * devSetRelSize))
-trainingSubjects = subjects[:tNum]
-validSubjects = subjects[tNum:]
+
+indices = np.random.permutation(len(subjects)).astype(int)
+trainingSubjects = [subjects[i] for i in indices[:tNum]]
+validSubjects = [subjects[i] for i in indices[tNum:]]
+np.savetxt(outputPath + 'SujetosTrainingSet.txt', trainingSubjects, fmt='%s')
+np.savetxt(outputPath + 'SujetosValidSet.txt', validSubjects, fmt='%s')
+
 match AugmentedTrainingSet:
     case 1:
         tNum = (tNum * tNum)
@@ -120,6 +125,10 @@ match AugmentedTrainingSet:
 
 k = 0
 j = 0
+condition1 = False
+condition2 = False
+trainingSetFiles = []
+validSetFiles = []
 # Data set avoids mixing same subject images
 for i in range(0, datasize):
     name1, name2 = atlasNames[i].split('_')[:2]
@@ -136,60 +145,23 @@ for i in range(0, datasize):
 
     condition2 = (validSubjects.__contains__(name1)) and (name2 == name1)
 
-    atlasImage = sitk.ReadImage(atlasImageFilenames[i])
-    atlasLabels = sitk.ReadImage(atlasLabelsFilenames[i])
-
-    trainingSetShape = [tNum, atlasImage.GetSize()[2], atlasImage.GetSize()[1], atlasImage.GetSize()[0]]
-    validSetShape = [vNum, atlasImage.GetSize()[2], atlasImage.GetSize()[1], atlasImage.GetSize()[0]]
-
-    if i == 0:
-        imagesTrainingSet = np.zeros(trainingSetShape)
-        labelsTrainingSet = np.zeros(trainingSetShape)
-        imagesValidSet = np.zeros(validSetShape)
-        labelsValidSet = np.zeros(validSetShape)
-        # Size of each 2d image:
-        dataSetImageSize_voxels = imagesTrainingSet.shape[1:4]  # obtiene el getsize[1 y 0]
-
     if condition1:
-        imagesTrainingSet[k, :, :, :] = np.reshape(sitk.GetArrayFromImage(atlasImage), [1, atlasImage.GetSize()[2], atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
-        labelsTrainingSet[k, :, :, :] = np.reshape(sitk.GetArrayFromImage(atlasLabels), [1, atlasImage.GetSize()[2], atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
-        k += 1
+        trainingSetFiles.append([atlasImageFilenames[i], atlasLabelsFilenames[i]])
 
     if condition2:
-        imagesValidSet[j, :, :, :] = np.reshape(sitk.GetArrayFromImage(atlasImage), [1, atlasImage.GetSize()[2], atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
-        labelsValidSet[j, :, :, :] = np.reshape(sitk.GetArrayFromImage(atlasLabels), [1, atlasImage.GetSize()[2], atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
-        j += 1
+        validSetFiles.append([atlasImageFilenames[i], atlasLabelsFilenames[i]])
 
-if saveDataSetMhd:
-    writeMhd(imagesTrainingSet.astype(np.float32), outputPath + 'images_training_set.mhd')
-    writeMhd(labelsTrainingSet.astype(np.uint8), outputPath + 'labels_training_set.mhd')
-    writeMhd(imagesValidSet.astype(np.float32), outputPath + 'images_valid_set.mhd')
-    writeMhd(labelsValidSet.astype(np.uint8), outputPath + 'labels_valid_set.mhd')
+
 # Initialize numpy array and read data:
-print("Number of atlases images: {0}".format(len(atlasNames)))
-print("List of atlases: {0}\n".format(atlasNames))
+print("\nNumber of training set images: {0}".format(len(trainingSetFiles)))
+print(trainingSubjects)
+print("\nNumber of valid set images: {0}".format(len(validSetFiles)))
+print(validSubjects)
+print('\n')
 
+#print("Number of atlases images: {0}".format(len(atlasNames)))
+#print("List of atlases: {0}\n".format(atlasNames))
 
-# Add the channel dimension for compatibility:
-imagesTrainingSet = np.expand_dims(imagesTrainingSet, axis=1)
-labelsTrainingSet = np.expand_dims(labelsTrainingSet, axis=1)
-
-imagesValidSet = np.expand_dims(imagesValidSet, axis=1)
-labelsValidSet = np.expand_dims(labelsValidSet, axis=1)
-
-# Cast to float (the model expects a float):
-imagesTrainingSet = imagesTrainingSet.astype(np.float32)
-labelsTrainingSet = labelsTrainingSet.astype(np.float32)
-
-
-imagesValidSet = imagesValidSet.astype(np.float32)
-labelsValidSet = labelsValidSet.astype(np.float32)
-
-
-######################## TRAINING, VALIDATION AND TEST DATA SETS ###########################
-trainingSet = dict([('input', imagesTrainingSet[:, :, :, :]), ('output', labelsTrainingSet[:, :, :, :])])
-devSet = dict([('input', imagesValidSet[:, :, :, :]), ('output', labelsValidSet[:,:,:,:])])
-print('Data set size. Training set: {0}. Dev set: {1}.'.format(trainingSet['input'].shape[0], devSet['input'].shape[0]))
 labelNames = ('Background', 'Left Psoas', 'Left Iliac', 'Left Quadratus', 'Left Multifidus', 'Right Psoas', 'Right Iliac', 'Right Quadratus', 'Right Multifidus')
 ####################### CREATE A U-NET MODEL #############################################
 # Create a UNET with one input and multiple output canal.
@@ -214,26 +186,20 @@ unet.to(device)
 #print('Test Unet Input/Output sizes:\n Input size: {0}.\n Output shape: {1}'.format(inp.shape, out.shape))
 #tensorGroundTruth.shape
 ##################################### U-NET TRAINING ############################################
-# Number of  batches:
-batchSize = 1
-devBatchSize = 1
-numBatches = np.ceil(trainingSet['input'].shape[0]/batchSize).astype(int)
-devNumBatches = np.ceil(devSet['input'].shape[0]/devBatchSize).astype(int)
+
 # Show results every printStep batches:
 plotStep_epochs = 1
 saveImage_epochs = 1
-numImagesPerRow = batchSize
+
 if plotStep_epochs != math.inf:
     figGraphs, axs_graphs = plt.subplots(1, 8, figsize=(15, 8))
 # Show dev set loss every showDevLossStep batches:
-#showDevLossStep = 1
-inputsDevSet = torch.from_numpy(devSet['input'])
-gtDevSet = torch.from_numpy(devSet['output'])
+
 # Train
 best_vloss = 1
 
-skip_plot = 100             # early epoch loss values tend to hide later values
-skip_model = 100           # avoids saving dataset images for the early epochs
+skip_plot = 40             # early epoch loss values tend to hide later values
+skip_model = 40            # avoids saving dataset images for the early epochs
 
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
@@ -255,14 +221,8 @@ deviter = 0
 
 torch.cuda.empty_cache()
 unet.to(device)
-for epoch in range(400):  # loop over the dataset multiple times
+for epoch in range(100):  # loop over the dataset multiple times
     epochNumbers.append(epoch)
-    if saveMhd:
-        outputTrainingSet = np.zeros(trainingSetShape)
-        outputValidSet = np.zeros(validSetShape)
-        if DEBUG:
-            outputTrainingSetProbMaps = np.zeros(np.concatenate(([multilabelNum], trainingSetShape)))
-            outputValidSetProbMaps = np.zeros(np.concatenate(([multilabelNum], validSetShape)))
 
     lossValuesTrainingSetEpoch = []
     lossValuesDevSetEpoch = []
@@ -274,12 +234,21 @@ for epoch in range(400):  # loop over the dataset multiple times
     #### TRAINING ####
     scaler = torch.cuda.amp.GradScaler()
     unet.train(True)
-    for i in range(numBatches):
+    for i in range(len(trainingSetFiles)):
+
+        trainingImage = sitk.ReadImage(trainingSetFiles[i][0])
+        trainingLabel = sitk.ReadImage(trainingSetFiles[i][1])
+
+        ### expand dims for channel and batch
+        trainingImageArray = np.expand_dims(np.expand_dims(sitk.GetArrayFromImage(trainingImage), axis=0), axis=0)
+        trainingLabelArray = np.expand_dims(np.expand_dims(sitk.GetArrayFromImage(trainingLabel), axis=0), axis=0)
+
         # get the inputs
-        inputs = torch.from_numpy(trainingSet['input'][i: i + 1, :, :, :]).to(device)
-        gt = torch.from_numpy(trainingSet['output'][i: i + 1, :, :, :]).to(device)
+        inputs = torch.from_numpy(trainingImageArray.astype(np.float32)).to(device)
+        gt = torch.from_numpy(trainingLabelArray.astype(np.float32)).to(device)
         gt = F.one_hot(gt.to(torch.int64))
         gt = torch.squeeze(torch.transpose(gt, 1, 5), 5)
+
         gt = gt.float()
 
         aux = atlasNames[i]
@@ -315,18 +284,12 @@ for epoch in range(400):  # loop over the dataset multiple times
         segmentation = torch.sigmoid(outputs.cpu().to(torch.float32))
         segmentation = maxProb(segmentation.detach().numpy(), multilabelNum)
         segmentation = (segmentation > 0.5) * 1
-        if saveMhd:
-            outputTrainingSet[i*batchSize:(i+1)*batchSize] = multilabel(segmentation, multilabelNum, Background)
-            if DEBUG:
-                outputsNumpy = outputs.cpu().to(torch.float32).detach().numpy()
-                outputTrainingSetProbMaps[:, i * batchSize:(i + 1) * batchSize,:,:] = outputsNumpy.transpose((1,0,2,3))
 
-        for k in range(label.shape[0]):
-            for j in range(multilabelNum):
-                lbl = label[k, j, :, :, :]
-                seg = segmentation[k, j, :, :, :]
-                diceScore = dice2d(lbl, seg)
-                diceTraining[j].append(diceScore)
+        for j in range(multilabelNum):
+            lbl = label[:, j, :, :, :]
+            seg = segmentation[:, j, :, :, :]
+            diceScore = dice2d(lbl, seg)
+            diceTraining[j].append(diceScore)
 
     for j in range(multilabelNum):
         diceTrainingEpoch[j].append(np.mean(diceTraining[j]))
@@ -346,13 +309,22 @@ for epoch in range(400):  # loop over the dataset multiple times
     #### VALIDATION ####
     unet.train(False)
     torch.cuda.empty_cache()
-    for i in range(devNumBatches):
+    for i in range(len(validSetFiles)):
         with torch.no_grad():
-            inputs = torch.from_numpy(devSet['input'][i * devBatchSize:(i + 1) * devBatchSize, :, :, :]).to(device)
-            gt = torch.from_numpy(devSet['output'][i * devBatchSize:(i + 1) * devBatchSize, :, :, :]).to(device)
+
+            validImage = sitk.ReadImage(validSetFiles[i][0])
+            validLabel = sitk.ReadImage(validSetFiles[i][1])
+
+            validImageArray = np.expand_dims(np.expand_dims(sitk.GetArrayFromImage(validImage), axis=0), axis=0)
+            validLabelArray = np.expand_dims(np.expand_dims(sitk.GetArrayFromImage(validLabel), axis=0), axis=0)
+
+            # get the inputs
+            inputs = torch.from_numpy(validImageArray.astype(np.float32)).to(device)
+            gt = torch.from_numpy(validLabelArray.astype(np.float32)).to(device)
             gt = F.one_hot(gt.to(torch.int64))
             gt = torch.squeeze(torch.transpose(gt, 1, 5), 5)
             gt = gt.float()
+
             if not Background:
                 gt = gt[:, 1:, :, :, :]
 
@@ -371,19 +343,13 @@ for epoch in range(400):  # loop over the dataset multiple times
         segmentation = torch.sigmoid(outputs.cpu().to(torch.float32))
         segmentation = maxProb(segmentation.detach().numpy(), multilabelNum)
         segmentation = (segmentation > 0.5) * 1
-        if saveMhd:
-            outputValidSet[i * devBatchSize:(i + 1) * devBatchSize] = multilabel(segmentation, multilabelNum, Background)
-            if DEBUG:
-                outputsNumpy = outputs.cpu().to(torch.float32).detach().numpy()
-                outputValidSetProbMaps[:, i * batchSize:(i + 1) * batchSize, :, :] = outputsNumpy.transpose(
-                    (1, 0, 2, 3))
 
-        for k in range(label.shape[0]):
-            for j in range(multilabelNum):
-                lbl = label[k, j, :, :, :]
-                seg = segmentation[k, j, :, :, :]
-                diceScore = dice2d(lbl, seg)
-                diceValid[j].append(diceScore)
+        for j in range(multilabelNum):
+            lbl = label[:, j, :, :, :]
+            seg = segmentation[:, j, :, :, :]
+            diceScore = dice2d(lbl, seg)
+            diceValid[j].append(diceScore)
+
     for j in range(multilabelNum):
         diceValidEpoch[j].append(np.mean(diceValid[j]))
         print('Valid Dice Score:  %f ' % np.mean(diceValid[j]))
@@ -442,15 +408,7 @@ for epoch in range(400):  # loop over the dataset multiple times
                 boxplot(data=(diceTraining[k], diceValid[k]),
                         xlabel=['Training Set', 'Valid Set'], outpath=(outputPath + labelNames[k] + '_boxplot.png'),
                         yscale=[0.7, 1.0], title=labelNames[k]+'Dice Scores')
-        if saveMhd:
-            writeMhd(outputTrainingSet.astype(np.uint8), outputPath + 'outputTrainingSet.mhd')
-            writeMhd(outputValidSet.astype(np.uint8), outputPath + 'outputValidSet.mhd')
-            if DEBUG:
-                for j in range(0, multilabelNum):
-                    writeMhd(outputTrainingSetProbMaps[j, :, :, :].squeeze(),
-                             outputPath + 'outputTrainingSetProbMaps_label{0}_epoch{1}.mhd'.format(j, epoch))
-                    writeMhd(outputValidSetProbMaps[j, :, :, :].squeeze(),
-                             outputPath + 'outputValidSetProbMaps_label{0}_epoch{1}.mhd'.format(j, epoch))
+
 
 
 print('Finished Training')

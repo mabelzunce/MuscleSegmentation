@@ -2,15 +2,10 @@
 # Runs a Dixon tissue segmentation for each case in the database.
 
 from __future__ import print_function
-from GetMetricFromElastixRegistration import GetFinalMetricFromElastixLogFile
-from MultiAtlasSegmentation import MultiAtlasSegmentation
-from ApplyBiasCorrection import ApplyBiasCorrection
+
 import SimpleITK as sitk
-import SitkImageManipulation as sitkIm
 import DixonTissueSegmentation
 import winshell
-import numpy as np
-import sys
 import os
 
 ############################### CONFIGURATION #####################################
@@ -22,20 +17,11 @@ OVERWRITE_EXISTING_SEGMENTATIONS = 1
 # The target is the folder where the MRI images to be processed are. In the folder only
 # folders with the case name should be found. Inside each case folder there must be a subfolder
 # named "ForLibrary" with the dixon images called "case_I, case_O, case_W, case_F".
-#targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\MarathonStudy\\PreMarathon\\AllWithLinks\\'
-#targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\MarathonStudy\\PostMarathon\\AllWithLinks\\'
-#targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\MarathonStudy\\PostMarathon\\NotSegmented\\'
-#targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\DixonFovOK\\'
-#targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\DixonFovOkTLCCases2020\\'
-targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\MuscleStudyHipSpine\\CouchTo5kStudy\\'
-#targetPath = 'D:\\UNSAM\\Estudiantes\\GermanBalerdi\\Data\\LumbarSpine3D\\RawData\\'
-subFolder = '\\ForLibraryNoCropping\\'
-subFolder = '\\ForLibraryCropped\\'
-#subFolder = ''
+targetPath = '../../Data/LumbarSpine3D/InputImages/'
 
 # Cases to process, leave it empty to process all the cases in folder:
-casesToSegment = ('C00007', 'C00019', 'C00020', 'C00057', 'C00077')
-casesToSegment = ('C00081')
+casesToSegment = ()
+casesToSegment = ()
 casesToSegment = list()
 # Look for the folders or shortcuts:
 files = os.listdir(targetPath)
@@ -78,7 +64,7 @@ for filenameInDir in files:
                     filename = dataPath + subFolder + name + suffix + '.' + extensionImages
                     dixonImages.append(sitk.Cast(sitk.ReadImage(filename), sitk.sitkFloat32))
 
-                # Fast fractions image:
+                # Fat fractions image:
                 waterPlusFatImage = sitk.Add(dixonImages[2], dixonImages[3])
                 fatFractionImage = sitk.Divide(dixonImages[3], waterPlusFatImage)
                 fatFractionImage = sitk.Mask(fatFractionImage,waterPlusFatImage>0, outsideValue = 0, maskingValue =0)

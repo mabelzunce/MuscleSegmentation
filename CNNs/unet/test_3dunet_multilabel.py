@@ -4,11 +4,15 @@ import numpy as np
 import os
 import math
 from datetime import datetime
+
+from sympy import false
+
 from utils import create_csv
 from utils import dice2d
 from utils import specificity
 from utils import sensitivity
 from utils import precision
+from utils import haus_distance
 from utils import maxProb
 from utils import writeMhd
 from utils import multilabel
@@ -34,9 +38,14 @@ Background = False       # Background is considered as label
 Boxplot = True           # Boxplot created in every best fit
 AugmentedTrainingSet = Augment.NA
 ############################ DATA PATHS ##############################################
-trainingSetPath = '../../Data/LumbarSpine3D/Registered&ResampledData/'
-outputPath = '../../Data/LumbarSpine3D/model/'
+trainingSetPath = '../../Data/LumbarSpine3D/ResampledData/'
+outputPath = '../../Data/LumbarSpine3D/modelTestResults/'
 modelLocation = '../../Data/LumbarSpine3D/PretrainedModel/'
+trainingSubjects = '../../Data/LumbarSpine3D/trainingSubjects/'
+validSubjects = '../../Data/LumbarSpine3D/validSubjects/'
+
+trainingTxt = trainingSubjects + os.listdir(trainingSubjects)[0]
+validTxt = validSubjects + os.listdir(validSubjects)[0]
 
 modelName = os.listdir(modelLocation)[0]
 unetFilename = modelLocation + modelName
@@ -64,7 +73,7 @@ trainingSetRelSize = 0.7
 devSetRelSize = 1 - trainingSetRelSize
 
 ######################### CHECK DEVICE ######################
-device = torch.device('cpu')
+device = torch.device('cuda:1')
 print(device)
 
 ###################### READ DATA AND PRE PROCESS IT FOR TRAINING DATA SETS #####################################################
@@ -110,8 +119,18 @@ for filename in files:
 
 tNum = int(np.floor(numSubjects * trainingSetRelSize))
 vNum = int(np.ceil(numSubjects * devSetRelSize))
-trainingSubjects = subjects[:tNum]
-validSubjects = subjects[tNum:]
+
+textFile = open(trainingTxt,'r')
+trainingSubjects = textFile.readlines()
+trainingSubjects = [s.replace('\n', '') for s in trainingSubjects]
+textFile.close()
+
+textFile = open(validTxt,'r')
+validSubjects = textFile.readlines()
+validSubjects = [s.replace('\n', '') for s in validSubjects]
+textFile.close()
+
+
 match AugmentedTrainingSet:
     case 1:
         tNum = (tNum * tNum)
@@ -119,23 +138,13 @@ match AugmentedTrainingSet:
         tNum = (numRot * tNum)
     case 3:
         tNum = (tNum + numRot) * tNum
-
 k = 0
 j = 0
 # Data set avoids mixing same subject images
+flag = True
 for i in range(0, datasize):
     #name1, name2 = atlasNames[i].split('_')[:1]
-    match AugmentedTrainingSet:
-        case 0:
-            condition1 = (trainingSubjects.__contains__(atlasNames[i]))
-        case 1:
-            condition1 = (trainingSubjects.__contains__(name1)) and (trainingSubjects.__contains__(name2))
-        case 2:
-            conditionAux = trainingSubjects.__contains__(name2) or validSubjects.__contains__(name2)
-            condition1 = ((trainingSubjects.__contains__(name1)) and not conditionAux)
-        case 3:
-            condition1 = (trainingSubjects.__contains__(name1)) and (not (validSubjects.__contains__(name2)))
-
+    condition1 = (trainingSubjects.__contains__(atlasNames[i]))
     condition2 = (validSubjects.__contains__(atlasNames[i]))
 
     atlasImage = sitk.ReadImage(atlasImageFilenames[i])
@@ -155,33 +164,13 @@ for i in range(0, datasize):
     if condition1:
         imagesTrainingSet[k, :, :, :] = np.reshape(sitk.GetArrayFromImage(atlasImage),[1, atlasImage.GetSize()[2], atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
         labelsTrainingSet[k, :, :, :] = np.reshape(sitk.GetArrayFromImage(atlasLabel), [1, atlasImage.GetSize()[2], atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
-        if i==0:
-            auximagesTrainingSet = sitk.GetArrayFromImage(atlasImage)
-            auxlabelsTrainingSet = sitk.GetArrayFromImage(atlasLabel)
-            flag = True
-        else:
-            auximagesTrainingSet = np.append(auximagesTrainingSet, sitk.GetArrayFromImage(atlasImage), axis=0)
-            auxlabelsTrainingSet = np.append(auxlabelsTrainingSet, sitk.GetArrayFromImage(atlasLabel), axis=0)
         k += 1
 
     if condition2:
-        if flag:
-            auximagesValidSet = sitk.GetArrayFromImage(atlasImage)
-            auxlabelsValidSet = sitk.GetArrayFromImage(atlasLabel)
-            flag = False
-        else:
-            auximagesValidSet = np.append(auximagesValidSet, sitk.GetArrayFromImage(atlasImage), axis=0)
-            auxlabelsValidSet = np.append(auxlabelsValidSet, sitk.GetArrayFromImage(atlasLabel), axis=0)
-
         imagesValidSet[j, :, :, :] = np.reshape(sitk.GetArrayFromImage(atlasImage), [1, atlasImage.GetSize()[2], atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
         labelsValidSet[j, :, :, :] = np.reshape(sitk.GetArrayFromImage(atlasLabel), [1, atlasImage.GetSize()[2], atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
         j += 1
 
-if saveDataSetMhd:
-    writeMhd(auximagesTrainingSet, outputPath + 'TrainingImages.mhd')
-    writeMhd(auxlabelsTrainingSet, outputPath + 'TrainingLabels.mhd')
-    writeMhd(auximagesValidSet, outputPath + 'ValidImages.mhd')
-    writeMhd(auxlabelsValidSet, outputPath + 'ValidLabels.mhd')
 # Initialize numpy array and read data:
 print("Number of atlases images: {0}".format(len(atlasNames)))
 print("List of atlases: {0}\n".format(atlasNames))
@@ -221,7 +210,7 @@ else:
     criterion = nn.BCEWithLogitsLoss()
 
 unet = Unet(1, multilabelNum)
-unet.load_state_dict(torch.load(unetFilename, map_location=device))
+unet.load_state_dict(torch.load(unetFilename, map_location=device,weights_only=True))
 total_params = sum(p.numel() for p in unet.parameters())
 print("Total Parameters: " + str(total_params))
 #tensorGroundTruth.shape
@@ -287,6 +276,12 @@ precValid = [[] for n in range(multilabelNum)]
 precTrainingEpoch = [[] for n in range(multilabelNum)]
 precValidEpoch = [[] for n in range(multilabelNum)]
 
+hausTraining = [[] for n in range(multilabelNum)]
+hausValid= [[] for n in range(multilabelNum)]
+
+hausTrainingEpoch = [[] for n in range(multilabelNum)]
+hausValidEpoch = [[] for n in range(multilabelNum)]
+
 #### TRAINING ####
 
 unet.train(False)
@@ -330,10 +325,12 @@ for i in range(numBatches):
                 specScore = specificity(lbl, seg)
                 sensScore = sensitivity(lbl, seg)
                 precScore = precision(lbl, seg)
+                #hausScore = haus_distance(lbl,seg)
                 diceTraining[j].append(diceScore)
                 specTraining[j].append(specScore)
                 sensTraining[j].append(sensScore)
                 precTraining[j].append(precScore)
+                #hausTraining[j].append(hausScore)
 
 for j in range(multilabelNum):
     diceTrainingEpoch[j].append(np.mean(diceTraining[j]))
@@ -385,15 +382,18 @@ for i in range(devNumBatches):
             specScore = specificity(lbl, seg)
             sensScore = sensitivity(lbl, seg)
             precScore = precision(lbl, seg)
+            hausScore = haus_distance(lbl,seg)
             diceValid[j].append(diceScore)
             specValid[j].append(specScore)
             sensValid[j].append(sensScore)
             precValid[j].append(precScore)
+            hausValid[j].append(hausScore)
 for j in range(multilabelNum):
     diceValidEpoch[j].append(np.mean(diceValid[j]))
     specValidEpoch[j].append(np.mean(specValid[j]))
     sensValidEpoch[j].append(np.mean(sensValid[j]))
     precValidEpoch[j].append(np.mean(precValid[j]))
+    hausValidEpoch[j].append(np.mean(hausValid[j]))
     print('Valid Dice Score:  %f ' % np.mean(diceValid[j]))
 
 avg_vloss = np.mean(lossValuesDevSetEpoch)
@@ -405,6 +405,7 @@ for k in range(multilabelNum):
     create_csv(sensValid[k], outputPath + 'Test_ValidSensitivity_' + labelNames[k] + '.csv')
     create_csv(specValid[k], outputPath + 'Test_ValidSpecificity_' + labelNames[k] + '.csv')
     create_csv(precValid[k], outputPath + 'Test_ValidPrecision_' + labelNames[k] + '.csv')
+    create_csv(hausValid[k], outputPath + 'Test_ValidHaus_' + labelNames[k] + '.csv')
 
 
 
