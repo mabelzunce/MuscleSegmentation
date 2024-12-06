@@ -17,6 +17,10 @@ from skimage.morphology import convex_hull_image
 import imageio
 from PIL import Image
 
+import csv
+
+import pandas as pd
+
 import platform
 
 #FUNCIONES:
@@ -65,6 +69,51 @@ def ApplyBiasCorrection(inputImage, shrinkFactor = (1,1,1)):
         output = biasFieldCorrFilter.Execute(inputImage)
     # return the output:
     return output
+
+
+#FUNCION PARA ESCRIBIR VOLUMENES EN EL .CSV
+def write_volumes_to_csv(output_csv_path, volumes, subject_name):
+    """
+    Escribe los volúmenes calculados en un archivo CSV.
+
+    Args:
+        output_csv_path (str): Ruta del archivo CSV.
+        volumes (dict): Diccionario con volúmenes por etiqueta.
+        subject_name (str): Nombre del sujeto.
+    """
+
+    file_exists = os.path.isfile(output_csv_path)
+    with open(output_csv_path, mode='a', newline='') as csv_file:
+        writer = csv.writer(csv_file)
+        #if not file_exists:
+            # Escribir encabezados si el archivo es nuevo
+            #headers = ['Subject'] + [f'Vol {label}' for label in sorted(volumes.keys())]
+            #writer.writerow(headers)
+        # Escribir datos
+        row = [subject_name] + [volumes[label] for label in sorted(volumes.keys())]
+        writer.writerow(row)
+
+#FUNCION PARA ESCRIBIR VOLUMENES EN EL .CSV
+def write_ff_to_csv(output_csv_path, ffs, subject_name):
+    """
+    Escribe los volúmenes calculados en un archivo CSV.
+
+    Args:
+        output_csv_path (str): Ruta del archivo CSV.
+        volumes (dict): Diccionario con volúmenes por etiqueta.
+        subject_name (str): Nombre del sujeto.
+    """
+    file_exists = os.path.isfile(output_csv_path)
+    with open(output_csv_path, mode='a', newline='') as csv_file:
+        writer = csv.writer(csv_file)
+        #if not file_exists:
+            #Escribir encabezados si el archivo es nuevo
+            #headers = ['Subject'] + [f'FF {label}' for label in sorted(ffs.keys())]
+            #writer.writerow(headers)
+        # Escribir datos
+        row = [subject_name] + [ffs[label] for label in sorted(ffs.keys())]
+        writer.writerow(row)
+
 
 ################ CONFIG ##############################
 # Needs registration
@@ -160,6 +209,23 @@ if preRegistration:
 #files = sorted(files)
 imageNames = []
 imageFilenames = []
+
+#VACIO LOS .CSV SI YA TIENEN ALGO:
+# Ruta completa del archivo
+file_path_v = '/home/facundo/data/Nepal/NewSegmentation/volumes.csv'
+# Verificar si el archivo existe
+if os.path.exists(file_path_v):
+    # Vaciar el archivo si ya existe
+    with open(file_path_v, 'w') as file:
+        pass  # Esto vacía el archivo
+
+# Ruta completa del archivo
+file_path_ff = '/home/facundo/data/Nepal/NewSegmentation/ffs.csv'
+# Verificar si el archivo existe
+if os.path.exists(file_path_ff):
+    # Vaciar el archivo si ya existe
+    with open(file_path_ff, 'w') as file:
+        pass  # Esto vacía el archivo
 
 ###################### READ DATA AND PRE PROCESS IT FOR TRAINING DATA SETS #####################################################
 i = 0
@@ -266,7 +332,6 @@ for fullFilename in files: #Itreo sobre la lista de imagenes en files (tiene la 
 
     sitk.WriteImage(output, outputPath + subject + '_segmentation' + extensionImages, True)
 
-
     #CALCULO DE VOLUMEN
     # Obtener las dimensiones espaciales de la imagen (espaciado en cada dimensión)
     spacing = sitkImageResampled.GetSpacing()  # Esto devuelve una tupla (spacing_x, spacing_y, spacing_z)
@@ -280,6 +345,9 @@ for fullFilename in files: #Itreo sobre la lista de imagenes en files (tiene la 
 
     # Volumen por voxel
     voxel_volume = np.prod(spacing) #volumen X.Y.Z
+
+    #Ruta archivo .csv
+    output_csv_path = os.path.join(outputPath, 'volumes.csv')
 
     # Diccionario para almacenar el volumen de cada etiqueta
     volumes = {}
@@ -297,6 +365,9 @@ for fullFilename in files: #Itreo sobre la lista de imagenes en files (tiene la 
 
         # Almacenar el volumen en el diccionario
         volumes[label] = label_volume
+
+    #Registrar en el .csv
+    write_volumes_to_csv(output_csv_path, volumes, subject)
 
     # Volumen de todas las etiquetas:
     print("\nVolúmenes de todas las etiquetas:")
@@ -349,7 +420,7 @@ for fullFilename in files: #Itreo sobre la lista de imagenes en files (tiene la 
             # Guardar la imagen resultante
             output_filename = os.path.join(outputPath, folder + '_ff' + extensionImages)
             sitk.WriteImage(fatfractionImage, output_filename)
-            print(f"Imagen de fracción de grasa guardada en: {output_filename}")
+            #print(f"Imagen de fracción de grasa guardada en: {output_filename}")
         else:
             print(
                 f"Archivo faltante en {folder_path}. Ver que los archivos {folder}_F.mhd y {folder}_W.mhd estén presentes.")
@@ -387,6 +458,9 @@ for fullFilename in files: #Itreo sobre la lista de imagenes en files (tiene la 
     fatfraction_array = sitk.GetArrayFromImage(fatfractionImage_resampled)
     segmentation_array = sitk.GetArrayFromImage(output)
 
+    #Ruta para .csv de FF
+    output_csv_path = os.path.join(outputPath, 'ffs.csv')
+
     # Calcular el Fat Fraction medio para cada etiqueta
     fat_fraction_means = {}
 
@@ -404,6 +478,9 @@ for fullFilename in files: #Itreo sobre la lista de imagenes en files (tiene la 
         else:
             fat_fraction_means[label] = None  # En caso de que no haya valores para esta etiqueta
 
+    # Registrar en el .csv
+    write_ff_to_csv(output_csv_path, fat_fraction_means, subject)
+
     # Imprimir los resultados
     print("\nFat Fraction medio por etiqueta:")
     #for label in range(0,9):
@@ -412,6 +489,168 @@ for fullFilename in files: #Itreo sobre la lista de imagenes en files (tiene la 
             print(f"Etiqueta {label}: {fat_mean:.4f}")
         else:
             print(f"Etiqueta {label}: Sin valores válidos")
+
+#Código para binarizar las segmentaciones
+
+# Función para cargar, binarizar y guardar segmentaciones
+def process_and_save_segmentations(folder, output_folder):
+    volume_results = {}
+    # Crear el directorio de salida si no existe
+    os.makedirs(output_folder, exist_ok=True)
+
+    for file in os.listdir(folder):
+        if file.endswith(".mhd") and "_segmentation" in file:
+            filepath = os.path.join(folder, file)
+            key = file.replace("_segmentation.mhd", "")
+
+            # Leer la imagen con SimpleITK
+            segmentation_image = sitk.ReadImage(filepath)
+            array = sitk.GetArrayFromImage(segmentation_image)  # Array 3D: (Depth, Height, Width)
+
+            # Binarizar la segmentación
+            binary_array = (array > 0).astype("uint8")
+
+            # Convertir de nuevo a imagen SimpleITK
+            binary_image = sitk.GetImageFromArray(binary_array)
+
+            # Copiar información espacial
+            binary_image.CopyInformation(segmentation_image)
+
+            # Guardar la imagen binarizada en el directorio de salida
+            output_path = os.path.join(output_folder, f"{key}_seg_binary.mhd")
+            sitk.WriteImage(binary_image, output_path)
+
+            print(f"Segmentación binarizada guardada en: {output_path}")
+
+            # Calcular el volumen de la región segmentada
+            # Obtener el tamaño del voxel (resolución espacial)
+            spacing = segmentation_image.GetSpacing()  # (z_spacing, y_spacing, x_spacing)
+
+            # Calcular el volumen de un voxel
+            voxel_volume = spacing[0] * spacing[1] * spacing[2]  # Volumen de un voxel
+
+            # Calcular el número de voxeles segmentados (región > 0)
+            num_segmented_voxels = np.sum(binary_array)
+
+            # Calcular el volumen total
+            total_volume = num_segmented_voxels * voxel_volume
+            volume_results[key] = total_volume
+
+            print(f"Volumen total para {key}: {total_volume} mm^3")
+
+    return volume_results
+
+# Ruta del directorio que contiene las segmentaciones originales
+inputSeg = '/home/facundo/data/Nepal/NewSegmentation/'
+# Ruta del directorio donde guardar las segmentaciones binarizadas
+outputBinSeg = '/home/facundo/data/Nepal/NewSegmentation/'
+
+
+#Ahora tengo que agarrar esa imagenes y usarlas de máscara sobre la imagen de FF para calcular el FF total
+
+# Función para aplicar máscara y calcular promedio de intensidades
+def apply_mask_and_calculate_ff(folder):
+    ff_results = {}
+    for file in os.listdir(folder):
+        if file.endswith("_seg_binary.mhd"):
+            # Cargar la máscara binarizada
+            mask_path = os.path.join(folder, file)
+            mask_image = sitk.ReadImage(mask_path)
+            mask_array = sitk.GetArrayFromImage(mask_image)  # Array 3D: (Depth, Height, Width)
+
+            # Encontrar el archivo correspondiente con sufijo '_ff'
+            key = file.replace("_seg_binary.mhd", "")
+            ff_file = f"{key}_ff.mhd"
+            ff_path = os.path.join(folder, ff_file)
+
+            if os.path.exists(ff_path):
+                # Cargar la imagen '_ff'
+                ff_image = sitk.ReadImage(ff_path)
+                ff_array = sitk.GetArrayFromImage(ff_image)  # Array 3D: (Depth, Height, Width)
+
+                # Verificar que las dimensiones coincidan
+                if mask_array.shape != ff_array.shape:
+                    print(f"Dimensiones no coinciden entre máscara y '_ff' para: {key}")
+                    continue
+
+                # Aplicar la máscara
+                masked_values = ff_array[mask_array > 0]
+
+                # Calcular el promedio de intensidades
+                mean_ff = np.mean(masked_values)
+                ff_results[key] = mean_ff
+
+                print(f"FF promedio para {key}: {mean_ff} mm^3")
+
+    return ff_results
+
+
+# Guardar los resultados en un CSV
+def save_results_to_csv(volume_results, ff_results, output_csv):
+    # Abrir el archivo CSV en modo escritura
+    with open(output_csv, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        # Escribir el encabezado
+        #writer.writerow(["Sujeto", "Volumen (mm^3)", "FF Promedio"])
+
+        # Escribir los resultados de volumen y FF promedio
+        for key in volume_results:
+            volume = volume_results.get(key, "N/A")
+            ff = ff_results.get(key, "N/A")
+            writer.writerow([key, volume, ff])
+
+    print(f"Resultados guardados en: {output_csv}")
+
+# Carpeta que contiene tanto las segmentaciones binarizadas como las imágenes '_ff'
+folder = '/home/facundo/data/Nepal/NewSegmentation/'
+
+# Procesar y guardar todas las segmentaciones
+volume_results = process_and_save_segmentations(inputSeg, outputBinSeg)
+# Procesar y calcular intensidades promedio
+ff_results = apply_mask_and_calculate_ff(folder)
+
+# Ruta del archivo CSV de salida
+TotalVol_MeanFF_csv = '/home/facundo/data/Nepal/NewSegmentation/TotalVol_MeanFF.csv'
+
+# Guardar los resultados en el archivo CSV
+save_results_to_csv(volume_results, ff_results, TotalVol_MeanFF_csv)
+
+#GENERAR EL CSV COMPLETO
+# Cargar los tres archivos sin encabezado
+df1 = pd.read_csv('/home/facundo/data/Nepal/NewSegmentation/volumes.csv', header=None)
+df2 = pd.read_csv('/home/facundo/data/Nepal/NewSegmentation/ffs.csv', header=None)
+df3 = pd.read_csv('/home/facundo/data/Nepal/NewSegmentation/TotalVol_MeanFF.csv', header=None)
+
+# Concatenar los DataFrames basándote en la primera columna (índice 0)
+df_concat = pd.merge(df1, df2, left_on=0, right_on=0, how='outer')
+df_concat = pd.merge(df_concat, df3, left_on=0, right_on=0, how='outer')
+
+# Guardar el DataFrame concatenado en un nuevo archivo
+df_concat.to_csv('/home/facundo/data/Nepal/NewSegmentation/vol_ff.csv', index=False, header=False)
+
+#Generar los .csv individuales y guardarlos en la carpeta de cada uno
+# Cargar el archivo concatenado
+df = pd.read_csv('/home/facundo/data/Nepal/NewSegmentation/vol_ff.csv', header=None)
+
+# Ruta base de las carpetas
+base_folder = '/home/facundo/data/Nepal/DIXON/'
+
+# Iterar sobre cada fila (cada sujeto)
+for _, row in df.iterrows():
+    subject_id = row[0]  # Suponemos que el identificador del sujeto está en la primera columna
+
+    # Ruta completa de la carpeta del sujeto
+    subject_folder = os.path.join(base_folder, str(subject_id))
+
+    # Verificar si la carpeta del sujeto existe
+    if os.path.exists(subject_folder):
+        # Crear un DataFrame solo con los datos de ese sujeto
+        subject_data = df[df[0] == subject_id]
+
+        # Guardar los datos del sujeto en un CSV dentro de su carpeta
+        subject_data.to_csv(f'{subject_folder}/{subject_id}.csv', index=False, header=False)
+    else:
+        print(f"La carpeta para el sujeto {subject_id} no existe.")
 
 #Código para crear GIFS de las segmentaciones
 
@@ -785,3 +1024,4 @@ def create_gifs(segmentations, output_folder):
 # Ejecutar el flujo
 segmentations = load_tissue_segmentations(input_folder)
 create_gifs(segmentations, output_folderTSG)
+
