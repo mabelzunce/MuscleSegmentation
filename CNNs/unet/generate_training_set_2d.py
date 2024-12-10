@@ -68,13 +68,68 @@ for folder in data:
 print("Number of atlases images: {0}".format(len(atlasNames)))
 print("List of atlases: {0}\n".format(atlasNames))
 
-
-
 ################################### REFERENCE IMAGE FOR THE REGISTRATION #######################
 indexReference = 1
 referenceSliceImage = sitk.ReadImage(atlasImageFilenames[indexReference])
 referenceSliceImage = referenceSliceImage[:, :, 0]
+sizeStackedImages = [referenceSliceImage.GetSize()[0], referenceSliceImage.GetSize()[1], len(atlasNames)]
+sizeNpStackedImages = [len(atlasNames), referenceSliceImage.GetSize()[1], referenceSliceImage.GetSize()[0]]
+ndaAtlasSliceImages = np.zeros(sizeNpStackedImages)
+ndaAtlasSliceLabels = np.zeros(sizeNpStackedImages)
 print('Reference image: {0}. Voxel size: {1}'.format(atlasImageFilenames[indexReference], referenceSliceImage.GetSize()))
+################################### READ IMAGES, EXTRACT SLICES AND REGISTER IMAGES TO THE REFERENCE ########################################
+for i in range(0, 3):#len(atlasNames)):
+
+    ############## 1) READ IMAGE WITH LABELS #############
+    # Read target image:
+    atlasSliceImage = sitk.ReadImage(atlasImageFilenames[i])
+    atlasSliceLabel = sitk.ReadImage(atlasLabelsFilenames[i])
+
+    atlasSliceImage = atlasSliceImage[:, :, 0]
+    atlasSliceLabel = atlasSliceLabel[:, :, 0]
+    # Cast the image as float:
+    atlasSliceImage = sitk.Cast(atlasSliceImage, sitk.sitkFloat32)
+    # Rigid registration to match voxel size and FOV.
+    ############## 1) RIGID REGISTRATION #############
+    # elastixImageFilter filter
+    elastixImageFilter = sitk.ElastixImageFilter()
+    # Parameter maps:
+    parameterMapVector = sitk.VectorOfParameterMap()
+    parameterMapVector.append(elastixImageFilter.ReadParameterFile(parameterFilesPath
+                                                                   + paramFileRigid + '.txt'))
+    # Registration:
+    elastixImageFilter.SetFixedImage(referenceSliceImage)
+    elastixImageFilter.SetMovingImage(atlasSliceImage)
+    elastixImageFilter.SetParameterMap(parameterMapVector)
+    elastixImageFilter.LogToConsoleOff()
+    elastixImageFilter.Execute()
+    # Get result and apply transform to labels:
+    # Get the images:
+    atlasSliceImage = elastixImageFilter.GetResultImage()
+    # Apply transform:
+    transformixImageFilter = sitk.TransformixImageFilter()
+    transformixImageFilter.SetMovingImage(atlasSliceLabel)
+    transformixImageFilter.SetTransformParameterMap(elastixImageFilter.GetTransformParameterMap())
+    transformixImageFilter.SetTransformParameter("FinalBSplineInterpolationOrder", "0")
+    transformixImageFilter.SetTransformParameter("ResultImagePixelType", "unsigned char")
+    transformixImageFilter.Execute()
+    atlasSliceLabel = sitk.Cast(transformixImageFilter.GetResultImage(), sitk.sitkUInt8)
+    # write the 2d images:
+    sitk.WriteImage(atlasSliceImage, outputPath + atlasNames[i] + '.' + extensionImages, True)
+    sitk.WriteImage(atlasSliceLabel, outputPath + atlasNames[i] + tagLabels + '.' + extensionImages, True)
+    # Show images:
+    if DEBUG:
+        ndaAtlasSliceImages[i,:,:] = sitk.GetArrayFromImage(atlasSliceImage)
+        ndaAtlasSliceLabels[i,:,:] = sitk.GetArrayFromImage(atlasSliceLabel)
+        plt.subplot(1,2,1)
+        plt.imshow(ndaAtlasSliceImages[i,:,:], cmap='gray')
+        plt.imshow(ndaAtlasSliceLabels[i,:,:], cmap='hot', alpha=0.5)
+if DEBUG:
+    img = sitk.GetImageFromArray(ndaAtlasSliceImages)
+    sitk.WriteImage(img, outputPath + 'dataset_stack_2d' + '.' + extensionImages, True)
+    img = sitk.GetImageFromArray(ndaAtlasSliceLabels)
+    sitk.WriteImage(img, outputPath + 'dataset_stack_2d' + tagLabels + '.' + extensionImages, True)
+
 
 ################################### READ IMAGES, EXTRACT SLICES AND REGISTER IMAGES TO THE REFERENCE ########################################
 for i in range(0, len(atlasNames)):
@@ -122,7 +177,13 @@ for i in range(0, len(atlasNames)):
         plt.subplot(1,2,1)
         plt.imshow(slice, cmap='gray')
         plt.imshow(labels, cmap='hot', alpha=0.5)
-
+    # Generate a 3D image:
+    if i == 0:
+        atlasSliceImages = atlasSliceImage
+        atlasSliceLabels = atlasSliceLabel
+    else:
+        sitk.JoinSeries(atlasSliceImages, atlasSliceImage)
+        sitk.JoinSeries(atlasSliceLabels, atlasSliceLabel)
     ################################### AUGMENTATE WITH REFLECTION AND ROTATION ########################################
     for reflectionX in [-1,1]:
         ############## Reflection ######################

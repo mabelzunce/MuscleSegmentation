@@ -10,14 +10,14 @@ from utils import swap_labels
 ############################### CONFIGURATION #####################################
 DEBUG = 0 # In debug mode, all the intermediate iamges are written.
 USE_COSINES_AND_ORIGIN = 1
-
+numLabels = 8
 ############################## AUGMENTATION PARAMETERS ##########################
 rotationValues_deg = range(-10, 10+1, 5)
 ############################### IMAGES AVAILABLE ###################################
 
-dataPath = 'D:\\Dataset\\3D_Dataset\\RegisteredImages\\'# Base data path.
-outputPath = 'D:\\Dataset\\3D_Dataset\\LinearAugment\\' # Base data path.
-croppedPath = 'D:\\Dataset\\3D_Dataset\\croppedImages\\'
+dataPath = '/home/martin/data_imaging/Muscle/GlutealSegmentations/PelvisFOV/ManualSegmentations/MhdRegisteredDownsampled/'# Base data path.
+outputPath = '/home/martin/data_imaging/Muscle/GlutealSegmentations/PelvisFOV/TrainingSetFromManual/LinearAugmentDownsampled/' # Base data path.
+croppedPath = '/home/martin/data_imaging/Muscle/GlutealSegmentations/PelvisFOV/TrainingSetFromManual/CroppedImages/'
 if not os.path.exists(outputPath):
     os.makedirs(outputPath)
 if not os.path.exists(croppedPath):
@@ -26,6 +26,13 @@ if not os.path.exists(croppedPath):
 # Look for the folders or shortcuts:
 data = os.listdir(dataPath)
 data = sorted(data)
+
+# Config
+cropImages = False
+x_min_Crop = 800
+x_max_Crop = 0
+y_min_Crop = 640
+y_max_Crop = 0
 # Image format extension:
 extensionShortcuts = 'lnk'
 strForShortcut = '-> '
@@ -58,58 +65,61 @@ print("Number of images: {0}".format(len(atlasNames)))
 print("List of atlases: {0}\n".format(atlasNames))
 
 
-x_min_Crop = 800
-x_max_Crop = 0
-y_min_Crop = 640
-y_max_Crop = 0
-for i in range(0, len(atlasNames)):
-    label = label = sitk.ReadImage(atlasLabelsFilenames[i])
-    labelArea = sitk.GetArrayFromImage(label) > 0
-    labelArea = np.bitwise_or.reduce(labelArea, axis=0) * 1
-    labelArea = sitk.GetImageFromArray(labelArea)
+# CROP IMAGES?
+if cropImages:
+    for i in range(0, len(atlasNames)):
+        label = label = sitk.ReadImage(atlasLabelsFilenames[i])
+        labelArea = sitk.GetArrayFromImage(label) > 0
+        labelArea = np.bitwise_or.reduce(labelArea, axis=0) * 1
+        labelArea = sitk.GetImageFromArray(labelArea)
 
-    label_stats_filter = sitk.LabelShapeStatisticsImageFilter()
-    label_stats_filter.Execute(labelArea)
-    bounding_box = label_stats_filter.GetBoundingBox(1)
-    x_min, y_min, x_max, y_max = bounding_box
+        label_stats_filter = sitk.LabelShapeStatisticsImageFilter()
+        label_stats_filter.Execute(labelArea)
+        bounding_box = label_stats_filter.GetBoundingBox(1)
+        x_min, y_min, x_max, y_max = bounding_box
 
-    if x_min < x_min_Crop:
-        x_min_Crop = x_min
-    if y_min < y_min_Crop:
-        y_min_Crop = y_min
-    if x_max > x_max_Crop:
-        x_max_Crop = x_max
-    if y_max > y_max_Crop:
-        y_max_Crop = y_max
+        if x_min < x_min_Crop:
+            x_min_Crop = x_min
+        if y_min < y_min_Crop:
+            y_min_Crop = y_min
+        if x_max > x_max_Crop:
+            x_max_Crop = x_max
+        if y_max > y_max_Crop:
+            y_max_Crop = y_max
 
-for i in range(0, len(atlasNames)):
-    image = sitk.ReadImage(atlasImageFilenames[i])
-    label = sitk.ReadImage(atlasLabelsFilenames[i])
+    for i in range(0, len(atlasNames)):
+        image = sitk.ReadImage(atlasImageFilenames[i])
+        label = sitk.ReadImage(atlasLabelsFilenames[i])
 
-    crop_region = (x_min_Crop, y_min_Crop, 0, x_max_Crop, y_max_Crop, image.GetSize()[2])
-    image = sitk.Crop(image, crop_region)
-    label = sitk.Crop(label, crop_region)
+        crop_region = (x_min_Crop, y_min_Crop, 0, x_max_Crop, y_max_Crop, image.GetSize()[2])
+        image = sitk.Crop(image, crop_region)
+        label = sitk.Crop(label, crop_region)
 
-    sitk.WriteImage(image, croppedPath + atlasNames[i] + 'cropped' + '.' + extensionImages)
-    sitk.WriteImage(label,  croppedPath + atlasNames[i] + 'cropped' + tagManLabels + '.' + extensionImages)
+        sitk.WriteImage(image, croppedPath + atlasNames[i] + 'cropped' + '.' + extensionImages, True)
+        sitk.WriteImage(label,  croppedPath + atlasNames[i] + 'cropped' + tagManLabels + '.' + extensionImages, True)
 
 for i in range(0, len(atlasNames)):
 
     for reflectionX in [-1, 1]:
         image = sitk.ReadImage(atlasImageFilenames[i])
         label = sitk.ReadImage(atlasLabelsFilenames[i])
-
-        image = sitk.GetArrayFromImage(image)
-        label = sitk.GetArrayFromImage(label)
+        imageCenter_mm = np.array(image.GetSpacing()) * np.array(image.GetSize()) / 2
+        # Remove labels that are not used:
+        maskRemoveLabels = sitk.Greater(label, numLabels)
+        label = sitk.Mask(label, maskRemoveLabels, 0, 1)
 
         if reflectionX == -1:
-            image = np.flip(image, axis=2)
-            label = np.flip(label, axis=2)
-            sitk.WriteImage(sitk.GetImageFromArray(image), outputPath + atlasNames[i] + '_flipped' + str(reflectionX) + '.' + extensionImages)
-
-        imageCenter_mm = np.array(image.GetSpacing()) * np.array(image.GetSize()) / 2
-        image = sitk.GetImageFromArray(image)
-        label = sitk.GetImageFromArray(label)
+            ndaImage = sitk.GetArrayFromImage(image)
+            ndaLabel = sitk.GetArrayFromImage(label)
+            ndaImage = np.flip(ndaImage, axis=2)
+            ndaLabel = np.flip(ndaLabel, axis=2)
+            imageAux = image
+            labelAux = label
+            image = sitk.GetImageFromArray(ndaImage)
+            label = sitk.GetImageFromArray(ndaLabel)
+            image.CopyInformation(imageAux)
+            label.CopyInformation(labelAux)
+            #sitk.WriteImage(sitk.GetImageFromArray(ndaImage), outputPath + atlasNames[i] + '_flipped' + str(reflectionX) + '.' + extensionImages, True)
 
         for rotAngle_deg in rotationValues_deg: #rotationValues_deg (definidos antes)= range(-10, 10+1, 5)
             rotation3D = sitk.Euler3DTransform()
@@ -122,11 +132,11 @@ for i in range(0, len(atlasNames)):
             labelTransformed = sitk.Resample(label, composite, sitk.sitkNearestNeighbor, 0, sitk.sitkUInt8)
             # Change the labels side:
             if reflectionX == -1:
-                for l in range(1, 6, 2):
-                    labelTransformed = swap_labels(labelTransformed, label1=l, label2=l + 1)
+                for l in range(1, round(numLabels/2)+1):
+                    labelTransformed = swap_labels(labelTransformed, label1=l, label2=l + numLabels/2)
             # write the 2d images:
-            sitk.WriteImage(imageTransformed, outputPath + atlasNames[i] + '_refX' + str(reflectionX) + '_rotDeg' + str(rotAngle_deg) +'.' + extensionImages)
-            sitk.WriteImage(labelTransformed, outputPath + atlasNames[i] + '_refX' + str(reflectionX) + '_rotDeg' + str(rotAngle_deg) + tagManLabels + '.' + extensionImages)
+            sitk.WriteImage(imageTransformed, outputPath + atlasNames[i] + '_refX' + str(reflectionX) + '_rotDeg' + str(rotAngle_deg) +'.' + extensionImages, True)
+            sitk.WriteImage(labelTransformed, outputPath + atlasNames[i] + '_refX' + str(reflectionX) + '_rotDeg' + str(rotAngle_deg) + tagManLabels + '.' + extensionImages, True)
 
             # Show images:
             if DEBUG:

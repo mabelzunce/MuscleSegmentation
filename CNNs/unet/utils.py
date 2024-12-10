@@ -250,7 +250,7 @@ def writeMhd(image, outpath, ref=0):
     img = sitk.GetImageFromArray(image)
     if ref != 0:
         img.CopyInformation(ref)
-    sitk.WriteImage(img, outpath)
+    sitk.WriteImage(img, outpath, True)
 
 
 

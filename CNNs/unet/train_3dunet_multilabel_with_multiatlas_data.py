@@ -25,20 +25,18 @@ class Augment(enumerate):
 
 
 DEBUG = False
-AMP = True             # Mixed Precision for larger batches and faster training
+AMP = False             # Mixed Precision for larger batches and faster training
 saveMhd = False         # Saves a mhd file for the output
-saveDataSetMhd = True  # Saves a Mhd file of the images and labels from dataset
+saveDataSetMhd = False  # Saves a Mhd file of the images and labels from dataset
 LoadModel = False      # Pretrained model
 Background = False        # Background is considered as label
 Boxplot = True           # Boxplot created in every best fit
 AugmentedTrainingSet = Augment.NA
 ############################ DATA PATHS ##############################################
-trainingSetPath = '../../Data/LumbarSpine3D/TrainingSetAugmentedLinear/'
+trainingSetPath = '../../Data/LumbarSpine3D/MultiAtlasSegmentedData/'
 outputPath = '../../Data/LumbarSpine3D/model/'
 modelLocation = '../../Data/LumbarSpine3D/PretrainedModel/'
-trainingSetPath = '/home/martin/data_imaging/Muscle/GlutealSegmentations/PelvisFOV/TrainingSetFromManual/LinearAugmentDownsampled/' #
-outputPath = '../../Data/GlutesPelvis3D/model/'
-modelLocation = '../../Data/GlutesPelvis3D/PretrainedModel/'
+
 if not os.path.exists(outputPath):
     os.makedirs(outputPath)
 if not os.path.exists(trainingSetPath):
@@ -57,13 +55,6 @@ extensionImages = 'mhd'
 tagInPhase = '_I'
 tagLabels = '_labels'
 ############################ PARAMETERS ################################################
-numLabels = 8
-labelNames = ('Background', 'Left Psoas', 'Left Iliac', 'Left Quadratus', 'Left Multifidus', 'Right Psoas', 'Right Iliac', 'Right Quadratus', 'Right Multifidus')
-labelNames = ('Background', 'Left GMAX', 'Left GMED', 'Left GMIN', 'Left TFL', 'Right GMAX', 'Right GMED', 'Right GMIN', 'Right TFL')
-labelForPlots = ['LP', 'LI', 'LQ', 'LM', 'RP', 'RI', 'RQ', 'RM']
-labelForPlotsWithBg = ['BG', 'LP', 'LI', 'LQ', 'LM', 'RP', 'RI', 'RQ', 'RM']
-labelForPlots = ['LGMAX', 'LGMED', 'LGMIN', 'LTFL', 'RGMAX', 'RGMED', 'RGMIN', 'RTFL']
-labelForPlotsWithBg = ['BG', 'LGMED', 'LGMIN', 'LTFL', 'RGMAX', 'RGMED', 'RGMIN', 'RTFL']
 # Size of the image we want to use in the cnn.
 # We will get it from the training set.
 # imageSize_voxels = (256,256)
@@ -73,13 +64,9 @@ trainingSetRelSize = 0.7
 devSetRelSize = 1 - trainingSetRelSize
 
 ######################### CHECK DEVICE ######################
-if torch.cuda.is_available():
-    for i in range(torch.cuda.device_count()):
-        print(torch.cuda.get_device_name(i))
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-device = 'cuda:0'
-print(torch.cuda.get_device_properties(0))
-#device = "cpu"
+print(device)
+
 ###################### READ DATA AND PRE PROCESS IT FOR TRAINING DATA SETS #####################################################
 # Look for the folders or shortcuts:
 files = os.listdir(trainingSetPath)
@@ -108,8 +95,11 @@ for filename in files:
         atlasLabelsFilenames.append(filenameLabels)
 
         # Data Set info
-        subjectName = filename.split('_')[0]
-        subjectAdd = filename.split('_')[1]
+        splitName = filename.split('_');
+        subjectName = splitName[0]
+        if len(splitName) > 1:
+            subjectAdd = splitName[1]
+
         if subject == subjectName:
             numImagesPerSubject += 1
             if not (subjectName.startswith(subjectAdd[0])):
@@ -123,17 +113,11 @@ tNum = int(np.floor(numSubjects * trainingSetRelSize))
 vNum = int(np.ceil(numSubjects * devSetRelSize))
 trainingSubjects = subjects[:tNum]
 validSubjects = subjects[tNum:]
-# Random selection of training and valid set.
-indices = np.random.permutation(len(subjects)).astype(int)
-trainingSubjects = [subjects[i] for i in indices[:tNum]]
-validSubjects = [subjects[i] for i in indices[tNum:]]
-
 match AugmentedTrainingSet:
     case 1:
         tNum = (tNum * tNum)
     case 2:
         tNum = (numRot * tNum)
-        suffixValid = "refX1_rotDeg0"
     case 3:
         tNum = (tNum + numRot) * tNum
 
@@ -150,23 +134,18 @@ for i in range(0, datasize):
         case 2:
             conditionAux = trainingSubjects.__contains__(name2) or validSubjects.__contains__(name2)
             condition1 = ((trainingSubjects.__contains__(name1)) and not conditionAux)
-            name1, name2, name3 = atlasNames[i].split('_')
-            condition2 = (validSubjects.__contains__(name1)) and ((name2+"_"+name3) == suffixValid) # Use refX1_rotDeg0
         case 3:
             condition1 = (trainingSubjects.__contains__(name1)) and (not (validSubjects.__contains__(name2)))
-            condition2 = (validSubjects.__contains__(name1)) and (name2 == name1) # Sel registered
 
-
+    condition2 = (validSubjects.__contains__(name1)) and (name2 == name1)
 
     atlasImage = sitk.ReadImage(atlasImageFilenames[i])
     atlasLabels = sitk.ReadImage(atlasLabelsFilenames[i])
-    # Remove labels that are not used:
-    maskRemoveLabels = sitk.Greater(atlasLabels, numLabels)
-    atlasLabels = sitk.Mask(atlasLabels, maskRemoveLabels,0, 1)
+
+    trainingSetShape = [tNum, atlasImage.GetSize()[2], atlasImage.GetSize()[1], atlasImage.GetSize()[0]]
+    validSetShape = [vNum, atlasImage.GetSize()[2], atlasImage.GetSize()[1], atlasImage.GetSize()[0]]
 
     if i == 0:
-        trainingSetShape = [tNum, atlasImage.GetSize()[2], atlasImage.GetSize()[1], atlasImage.GetSize()[0]]
-        validSetShape = [vNum, atlasImage.GetSize()[2], atlasImage.GetSize()[1], atlasImage.GetSize()[0]]
         imagesTrainingSet = np.zeros(trainingSetShape)
         labelsTrainingSet = np.zeros(trainingSetShape)
         imagesValidSet = np.zeros(validSetShape)
@@ -183,14 +162,11 @@ for i in range(0, datasize):
         imagesValidSet[j, :, :, :] = np.reshape(sitk.GetArrayFromImage(atlasImage), [1, atlasImage.GetSize()[2], atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
         labelsValidSet[j, :, :, :] = np.reshape(sitk.GetArrayFromImage(atlasLabels), [1, atlasImage.GetSize()[2], atlasImage.GetSize()[1], atlasImage.GetSize()[0]])
         j += 1
-
 if saveDataSetMhd:
-    stackedSizeTraining = (imagesTrainingSet.shape[0]*dataSetImageSize_voxels[0], dataSetImageSize_voxels[1], dataSetImageSize_voxels[2])
-    writeMhd(np.reshape(imagesTrainingSet, stackedSizeTraining).astype(np.float32), outputPath + 'images_training_set.mhd')
-    writeMhd(np.reshape(labelsTrainingSet, stackedSizeTraining).astype(np.uint8), outputPath + 'labels_training_set.mhd')
-    stackedSizeValid = (imagesValidSet.shape[0] * dataSetImageSize_voxels[0], dataSetImageSize_voxels[1], dataSetImageSize_voxels[2])
-    writeMhd(np.reshape(imagesValidSet, stackedSizeValid).astype(np.float32), outputPath + 'images_valid_set.mhd')
-    writeMhd(np.reshape(labelsValidSet, stackedSizeValid).astype(np.uint8), outputPath + 'labels_valid_set.mhd')
+    writeMhd(imagesTrainingSet.astype(np.float32), outputPath + 'images_training_set.mhd')
+    writeMhd(labelsTrainingSet.astype(np.uint8), outputPath + 'labels_training_set.mhd')
+    writeMhd(imagesValidSet.astype(np.float32), outputPath + 'images_valid_set.mhd')
+    writeMhd(labelsValidSet.astype(np.uint8), outputPath + 'labels_valid_set.mhd')
 # Initialize numpy array and read data:
 print("Number of atlases images: {0}".format(len(atlasNames)))
 print("List of atlases: {0}\n".format(atlasNames))
@@ -216,17 +192,17 @@ labelsValidSet = labelsValidSet.astype(np.float32)
 trainingSet = dict([('input', imagesTrainingSet[:, :, :, :]), ('output', labelsTrainingSet[:, :, :, :])])
 devSet = dict([('input', imagesValidSet[:, :, :, :]), ('output', labelsValidSet[:,:,:,:])])
 print('Data set size. Training set: {0}. Dev set: {1}.'.format(trainingSet['input'].shape[0], devSet['input'].shape[0]))
-
+labelNames = ('Background', 'Left Psoas', 'Left Iliac', 'Left Quadratus', 'Left Multifidus', 'Right Psoas', 'Right Iliac', 'Right Quadratus', 'Right Multifidus')
 ####################### CREATE A U-NET MODEL #############################################
 # Create a UNET with one input and multiple output canal.
 multilabelNum = 8
 if Background:
     multilabelNum += 1
-    xLabel = labelForPlotsWithBg
+    xLabel = ['BG', 'LP', 'LI', 'LQ', 'LM', 'RP', 'RI', 'RQ', 'RM']
     criterion = nn.BCEWithLogitsLoss()
 else:
     labelNames = labelNames[1:]
-    xLabel = labelForPlots
+    xLabel = ['LP', 'LI', 'LQ', 'LM', 'RP', 'RI', 'RQ', 'RM']
     criterion = nn.BCEWithLogitsLoss()
 
 unet = Unet(1, multilabelNum)
@@ -258,8 +234,8 @@ gtDevSet = torch.from_numpy(devSet['output'])
 # Train
 best_vloss = 1
 
-skip_plot = 100             # early epoch loss values tend to hide later values
-skip_model = 100           # avoids saving dataset images for the early epochs
+skip_plot = 50             # early epoch loss values tend to hide later values
+skip_model = 50            # avoids saving dataset images for the early epochs
 
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
@@ -281,7 +257,7 @@ deviter = 0
 
 torch.cuda.empty_cache()
 unet.to(device)
-for epoch in range(400):  # loop over the dataset multiple times
+for epoch in range(200):  # loop over the dataset multiple times
     epochNumbers.append(epoch)
     if saveMhd:
         outputTrainingSet = np.zeros(trainingSetShape)
@@ -469,14 +445,14 @@ for epoch in range(400):  # loop over the dataset multiple times
                         xlabel=['Training Set', 'Valid Set'], outpath=(outputPath + labelNames[k] + '_boxplot.png'),
                         yscale=[0.7, 1.0], title=labelNames[k]+'Dice Scores')
         if saveMhd:
-            writeMhd(outputTrainingSet.astype(np.uint8), outputPath + 'outputTrainingSet.mhd', True)
-            writeMhd(outputValidSet.astype(np.uint8), outputPath + 'outputValidSet.mhd', True)
+            writeMhd(outputTrainingSet.astype(np.uint8), outputPath + 'outputTrainingSet.mhd')
+            writeMhd(outputValidSet.astype(np.uint8), outputPath + 'outputValidSet.mhd')
             if DEBUG:
                 for j in range(0, multilabelNum):
                     writeMhd(outputTrainingSetProbMaps[j, :, :, :].squeeze(),
-                             outputPath + 'outputTrainingSetProbMaps_label{0}_epoch{1}.mhd'.format(j, epoch), True)
+                             outputPath + 'outputTrainingSetProbMaps_label{0}_epoch{1}.mhd'.format(j, epoch))
                     writeMhd(outputValidSetProbMaps[j, :, :, :].squeeze(),
-                             outputPath + 'outputValidSetProbMaps_label{0}_epoch{1}.mhd'.format(j, epoch), True)
+                             outputPath + 'outputValidSetProbMaps_label{0}_epoch{1}.mhd'.format(j, epoch))
 
 
 print('Finished Training')

@@ -127,7 +127,7 @@ def process_and_save_segmentations(folder, output_folder):
 
             # Save the binary image in the output directory
             output_path = os.path.join(output_folder, f"{key}_seg_binary.mhd")
-            sitk.WriteImage(binary_image, output_path)
+            sitk.WriteImage(binary_image, output_path, True)
 
             print(f"Binary segmentation saved in: {output_path}")
 
@@ -198,16 +198,16 @@ def save_results_to_csv(volume_results, ff_results, output_csv):
 
 
 # CONFIGURATION:
+device_to_use = 'cuda' #'cpu'
 # Needs registration
 preRegistration = True #TRUE: Pre-register using the next image
 registrationReferenceFilename = '../../Data/LumbarSpine3D/ResampledData/C00001.mhd'
 
 #DATA PATHS:
-dataPath = '/home/facundo/data/Nepal/DIXON/' #INPUT FOLDER THAT CONTAINS ALL THE SUBDIRECTORIES
-outputPath = '/home/facundo/data/Nepal/NewSegmentation//' #OUPUT FOLDER TO SAVE THE SEGMENTATIONS
+dataPath = '/home/martin/data_imaging/Muscle/data_cto5k_cyclists/AllData/RawCompressed/' #INPUT FOLDER THAT CONTAINS ALL THE SUBDIRECTORIES
+outputPath = '/home/martin/data_imaging/Muscle/data_cto5k_cyclists/AllData/Processed/' #OUPUT FOLDER TO SAVE THE SEGMENTATIONS
 outputResampledPath = outputPath + '/Resampled/' #RESAMPLED SEGMENTATIONS PATH
 #outputBiasCorrectedPath = outputPath + '/BiasFieldCorrection/'
-outputBiasCorrectedPath = dataPath #I save the images in the same folder because its easier
 modelLocation = '../../Data/LumbarSpine3D/PretrainedModel/'
 dataInSubdirPerSubject = True
 
@@ -248,9 +248,6 @@ if not os.path.exists(outputPath):
 if not os.path.exists(outputResampledPath):
     os.makedirs(outputResampledPath)
 
-if not os.path.exists(outputBiasCorrectedPath):
-    os.makedirs(outputBiasCorrectedPath)
-
 vol_csv_name = 'volumes.csv'
 ff_csv_name = 'ffs.csv'
 vol_and_ff_name = 'volumes_and_ffs.csv'
@@ -283,7 +280,7 @@ modelName = os.listdir(modelLocation)[0]
 modelFilename = modelLocation + modelName
 
 #CHECK DEVICE:
-device = torch.device('cpu') #'cuda' uses the graphic board
+device = torch.device(device_to_use) #'cuda' uses the graphic board
 print(device)
 if device.type == 'cuda':
     t = torch.cuda.get_device_properties(0).total_memory
@@ -332,6 +329,7 @@ imageFilenames = []
 #READ DATA AND PRE PROCESS IT FOR TRAINING DATA SETS:
 i = 0
 #files = files[0:2]
+fat_fraction_means_all_subjects = list()
 for fullFilename in files:
     fileSplit = os.path.split(fullFilename) #Divide the path in directory-name
     pathSubject = fileSplit[0]
@@ -340,11 +338,16 @@ for fullFilename in files:
     subject = name[:-len(tagInPhase)] #Name of the subject without the tag
     print(subject) #Flag to check the actual subject
 
+    # Output path for this subject:
+    outputPathThisSubject = os.path.join(outputPath, subject)
+    if not os.path.exists(outputPathThisSubject):
+        os.makedirs(outputPathThisSubject)
+
     #Read the image
     sitkImage = sitk.ReadImage(fullFilename)
 
     # Apply Bias Field Correction
-    shrinkFactor = (2, 2, 1)
+    shrinkFactor = (4, 4, 2)
     sitkImage = ApplyBiasCorrection(sitkImage, shrinkFactor=shrinkFactor)
 
     # Obtains the name of the file (without the complete path and divide name and extension)
@@ -354,9 +357,9 @@ for fullFilename in files:
     new_filename = f"{filename_no_ext}_biasFieldCorrection{file_extension}"
 
     # Builds the path to save the corrected image
-    outputBiasFilename = os.path.join(outputBiasCorrectedPath, new_filename)
+    outputBiasFilename = os.path.join(outputPathThisSubject, new_filename)
 
-    sitk.WriteImage(sitkImage, outputBiasFilename)
+    sitk.WriteImage(sitkImage, outputBiasFilename, True)
 
     if preRegistration:
         # elastixImageFilter filter
@@ -426,8 +429,10 @@ for fullFilename in files:
         transformixImageFilter.Execute()
         output = sitk.Cast(transformixImageFilter.GetResultImage(), sitk.sitkUInt8)
 
-    sitk.WriteImage(output, outputPath + subject + '_segmentation' + extensionImages, True)
+    output_single_mask = output > 0
 
+    sitk.WriteImage(output, os.path.join(outputPathThisSubject, subject + '_segmentation' + extensionImages), True)
+    sitk.WriteImage(output_single_mask, os.path.join(outputPathThisSubject, subject + '_lumbar_spine_mask' + extensionImages), True)
     #VOLUME CALCULATION:
 
     # Get the spacial dimensions
@@ -444,13 +449,13 @@ for fullFilename in files:
     voxel_volume = np.prod(spacing) #volume (X.Y.Z)
 
     #Path of the volume csv file
-    output_csv_path = os.path.join(outputPath, 'volumes.csv')
+    output_csv_path = os.path.join(outputPathThisSubject, 'volumes.csv')
 
     # Volume dictionary to save the label volumes
     volumes = {}
 
     # Iterate over labels
-    for label in range(num_labels+1):
+    for label in range(1, num_labels+1):
         # Creates a mask for the actual label (1 or 0)
         label_mask = (segmentation_array == label).astype(np.uint8)
 
@@ -477,70 +482,41 @@ for fullFilename in files:
     subdirectories = sorted([d for d in os.listdir(dataPath) if os.path.isdir(os.path.join(dataPath, d))])
 
     auxName = None
-    for folder in subdirectories:
-        folder_path = os.path.join(dataPath, folder)
-        fat_file = os.path.join(folder_path, folder + fatSuffix + extensionImages)
-        water_file = os.path.join(folder_path, folder + waterSuffix + extensionImages)
+    fat_file = os.path.join(pathSubject, subject + fatSuffix + extensionImages)
+    water_file = os.path.join(pathSubject, subject + waterSuffix + extensionImages)
 
-        # Check if the files exists:
-        if os.path.exists(fat_file) and os.path.exists(water_file):
-            fatImage = sitk.Cast(sitk.ReadImage(fat_file), sitk.sitkFloat32)
-            waterImage = sitk.Cast(sitk.ReadImage(water_file), sitk.sitkFloat32)
+    # Check if the files exists:
+    if os.path.exists(fat_file) and os.path.exists(water_file):
+        fatImage = sitk.Cast(sitk.ReadImage(fat_file), sitk.sitkFloat32)
+        waterImage = sitk.Cast(sitk.ReadImage(water_file), sitk.sitkFloat32)
 
-            # Calculate the FF image and apply the mask on:
-            waterfatImage = sitk.Add(fatImage, waterImage)
-            fatfractionImage = sitk.Divide(fatImage, waterfatImage)
-            fatfractionImage = sitk.Cast(
-                sitk.Mask(fatfractionImage, waterfatImage > 0, outsideValue=0, maskingValue=0),
-                sitk.sitkFloat32)
+        # Calculate the FF image and apply the mask on:
+        waterfatImage = sitk.Add(fatImage, waterImage)
+        fatfractionImage = sitk.Divide(fatImage, waterfatImage)
+        fatfractionImage = sitk.Cast(
+            sitk.Mask(fatfractionImage, waterfatImage > 0, outsideValue=0, maskingValue=0),
+            sitk.sitkFloat32)
 
-            # Save the resulting image:
-            output_filename = os.path.join(outputPath, folder + '_ff' + extensionImages)
-            sitk.WriteImage(fatfractionImage, output_filename)
-            #print(f"FF Image saved in: {output_filename}")
-        else:
-            print(
-                f"Archivo faltante en {folder_path}. Ver que los archivos {folder}_F.mhd y {folder}_W.mhd estén presentes.")
+        # Save the resulting image:
+        output_filename = os.path.join(outputPathThisSubject, subject + '_ff' + extensionImages)
+        sitk.WriteImage(fatfractionImage, output_filename, True)
+        #print(f"FF Image saved in: {output_filename}")
+    else:
+        print(
+            f"Archivo faltante en {folder_path}. Ver que los archivos {folder}_F.mhd y {folder}_W.mhd estén presentes.")
 
     #FF CALCULATION:
 
-    # FUNCTION TO RESAMPLE IMAGES:
-
-    #Resample the images:
-    resampler = sitk.ResampleImageFilter()
-    resampler.SetReferenceImage(output)
-    resampler.SetInterpolator(sitk.sitkLinear)
-    resampler.SetOutputPixelType(fatfractionImage.GetPixelID())
-    fatfractionImage_resampled = resampler.Execute(fatfractionImage)
-
-    #def resample_to_match(image, reference):
-
-    #    resampler = sitk.ResampleImageFilter()
-    #    resampler.SetReferenceImage(reference)
-    #    resampler.SetInterpolator(sitk.sitkLinear)
-    #    resampler.SetOutputPixelType(image.GetPixelID())
-    #    return resampler.Execute(image)
-
-    # Remuestrear fatfractionImage para que coincida con output
-    #fatfractionImage_resampled = resample_to_match(fatfractionImage, output)
-
-    # Check the dimensions
-    if fatfractionImage_resampled.GetSize() != output.GetSize():
-        print(f"Dimensiones incompatibles: "
-              f"fatfractionImage_resampled {fatfractionImage_resampled.GetSize()} vs output {output.GetSize()}")
-        raise ValueError("Las dimensiones de las imágenes no coinciden después del remuestreo.")
-
     # Images to numpy arrays
-    fatfraction_array = sitk.GetArrayFromImage(fatfractionImage_resampled)
-    segmentation_array = sitk.GetArrayFromImage(output)
+    fatfraction_array = sitk.GetArrayFromImage(fatfractionImage)
 
     #FF .CSV PATH:
-    output_csv_path = os.path.join(outputPath, 'ffs.csv')
+    output_csv_path = os.path.join(outputPathThisSubject, 'ffs.csv')
 
     # Mean FF for every single label
     fat_fraction_means = {}
 
-    for label in range(multilabelNum+1):
+    for label in range(1, multilabelNum+1):
         # Mask for actual label
         label_mask = (segmentation_array == label)
 
@@ -553,7 +529,8 @@ for fullFilename in files:
             fat_fraction_means[label] = np.mean(fat_values)
         else:
             fat_fraction_means[label] = None  # No values for that label
-
+    # Add them to the list:
+    fat_fraction_means_all_subjects.append(fat_fraction_means)
     # Write on the csv file
     write_ff_to_csv(output_csv_path, fat_fraction_means, subject)
 
@@ -568,7 +545,7 @@ for fullFilename in files:
 
     #SAVE THE VOLUME AND FF VALUES FOR EVERY SUBJECT ON THE SAME .CSV FILE:
     # VOL & FF .CSV PATH:
-    output_csv_path = os.path.join(outputPath, 'volumes_and_ffs.csv')
+    output_csv_path = os.path.join(outputPathThisSubject, 'volumes_and_ffs.csv')
     #CSV FOR ALL THE VOLUME AND FF LABELS:
     write_vol_ff_to_csv(output_csv_path, volumes, fat_fraction_means, subject)
 

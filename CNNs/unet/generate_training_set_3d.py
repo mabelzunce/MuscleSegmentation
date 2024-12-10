@@ -26,6 +26,10 @@ dataPath = '../../Data/LumbarSpine3D/RawData/' # Base data path.
 outputPath = '../../Data/LumbarSpine3D/ResampledData/' # Base data path.
 outputAugmentedLinearPath = '../../Data/LumbarSpine3D/TrainingSetAugmentedLinear/' # Base data path.
 outputAugmentedNonLinearPath = '../../Data/LumbarSpine3D/TrainingSetAugmentedNonLinear/' # Base data path.
+dataPath = '../../Data/LumbarSpine3D/RawData/' # Base data path.
+outputPath = '../../Data/LumbarSpine3D/ResampledData/' # Base data path.
+outputAugmentedLinearPath = '../../Data/LumbarSpine3D/TrainingSetAugmentedLinear/' # Base data path.
+outputAugmentedNonLinearPath = '../../Data/LumbarSpine3D/TrainingSetAugmentedNonLinear/' # Base data path.
 if not os.path.exists(outputPath):
     os.makedirs(outputPath)
 if not os.path.exists(outputAugmentedLinearPath):
