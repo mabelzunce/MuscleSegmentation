@@ -63,7 +63,7 @@ def ApplyBiasCorrection(inputImage, shrinkFactor = (1,1,1)):
 def write_volumes_to_csv(output_csv_path, volumes, subject_name):
 
     file_exists = os.path.isfile(output_csv_path)
-    with open(output_csv_path, mode='a', newline='') as csv_file:
+    with open(output_csv_path, mode='w', newline='') as csv_file:
         writer = csv.writer(csv_file)
         #if not file_exists:
             # Write headers if the file is new
@@ -77,7 +77,7 @@ def write_volumes_to_csv(output_csv_path, volumes, subject_name):
 def write_ff_to_csv(output_csv_path, ffs, subject_name):
 
     file_exists = os.path.isfile(output_csv_path)
-    with open(output_csv_path, mode='a', newline='') as csv_file:
+    with open(output_csv_path, mode='w', newline='') as csv_file:
         writer = csv.writer(csv_file)
         #if not file_exists:
             # Write headers if the file is new
@@ -90,7 +90,7 @@ def write_ff_to_csv(output_csv_path, ffs, subject_name):
 def write_vol_ff_to_csv(output_csv_path, volumes, ffs, subject_name):
 
     file_exists = os.path.isfile(output_csv_path)
-    with open(output_csv_path, mode='a', newline='') as csv_file:
+    with open(output_csv_path, mode='w', newline='') as csv_file:
         writer = csv.writer(csv_file)
         #if not file_exists:
             # Write headers if the file is new
@@ -196,16 +196,68 @@ def save_results_to_csv(volume_results, ff_results, output_csv):
 
     print(f"Information saved in: {output_csv}")
 
+def subject_csv(name, all_volumes, all_ffs, total_vol, mean_ff, subject_path):
+
+    # Validar que la carpeta exista
+    if not os.path.exists(subject_path):
+        print(f"Error: La carpeta {subject_path} no existe.")
+        return
+
+    # Crear la ruta del archivo CSV
+    csv_file = os.path.join(subject_path, f"{name}.csv")
+
+    # Preparar los datos
+    row = [name] + list(all_volumes.values()) + list(all_ffs.values()) + [total_vol, mean_ff]
+
+    # Escribir el archivo CSV
+    try:
+        with open(csv_file, mode='w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(row)
+        print(f"Archivo CSV generado exitosamente en {subject_path}")
+    except Exception as e:
+        print(f"Error al generar el archivo CSV: {e}")
+
+def all_subjects_csv(names, list_all_volumes, list_all_ffs, list_total_vol, list_mean_ff, general_path):
+    # Validar que las listas tengan la misma longitud
+    if not all(len(lista) == len(names) for lista in [list_all_volumes, list_all_ffs, list_total_vol, list_mean_ff]):
+        print("Error: Todas las listas deben tener la misma longitud.")
+        return
+
+    # Determinar el máximo número de columnas requerido para los vectores
+    max_volumenes = max(len(vol) for vol in list_all_volumes)
+    max_ffs = max(len(ff) for ff in list_all_ffs)
+
+    # Preparar las filas
+    rows = []
+    for i in range(len(names)):
+        row = [names[i]]
+        # Agregar volúmenes y rellenar con ceros si faltan valores
+        row += list(list_all_volumes[i].values()) + [0] * (max_volumenes - len(list_all_volumes[i]))
+        # Agregar FFs y rellenar con ceros si faltan valores
+        row += list(list_all_ffs[i].values()) + [0] * (max_ffs - len(list_all_ffs[i]))
+        # Agregar vol_total y ff_medio
+        row += [list_total_vol[i], list_mean_ff[i]]
+        rows.append(row)
+
+    # Escribir el archivo CSV
+    try:
+        with open(general_path, mode='w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerows(rows)  # Escribir las filas
+        print(f"CSV succesfully created in {general_path}")
+    except Exception as e:
+        print(f"Failure to create the csv file: {e}")
 
 # CONFIGURATION:
-device_to_use = 'cuda' #'cpu'
+device_to_use = 'cpu' #'cpu'
 # Needs registration
 preRegistration = True #TRUE: Pre-register using the next image
 registrationReferenceFilename = '../../Data/LumbarSpine3D/ResampledData/C00001.mhd'
 
 #DATA PATHS:
-dataPath = '/home/martin/data_imaging/Muscle/data_cto5k_cyclists/AllData/RawCompressed/' #INPUT FOLDER THAT CONTAINS ALL THE SUBDIRECTORIES
-outputPath = '/home/martin/data_imaging/Muscle/data_cto5k_cyclists/AllData/Processed/' #OUPUT FOLDER TO SAVE THE SEGMENTATIONS
+dataPath = '/home/facundo/data/Nepal/DIXON/' #INPUT FOLDER THAT CONTAINS ALL THE SUBDIRECTORIES
+outputPath = '/home/facundo/data/Nepal/NewSegmentation/' #OUPUT FOLDER TO SAVE THE SEGMENTATIONS
 outputResampledPath = outputPath + '/Resampled/' #RESAMPLED SEGMENTATIONS PATH
 #outputBiasCorrectedPath = outputPath + '/BiasFieldCorrection/'
 modelLocation = '../../Data/LumbarSpine3D/PretrainedModel/'
@@ -250,6 +302,7 @@ if not os.path.exists(outputResampledPath):
 
 vol_csv_name = 'volumes.csv'
 ff_csv_name = 'ffs.csv'
+all_csv_name = 'all_volumes_and_ffs.csv'
 vol_and_ff_name = 'volumes_and_ffs.csv'
 totalvol_and_meanff_name = 'TotalVol_MeanFF.csv'
 
@@ -268,6 +321,12 @@ file_path_vol_ff = os.path.join(outputPath, vol_and_ff_name)
 if os.path.exists(file_path_vol_ff):
     with open(file_path_vol_ff, 'w') as file:
         pass  # Clear
+
+general_path = os.path.join(outputPath, all_csv_name)
+if os.path.exists(general_path):
+    with open(general_path, 'w') as file:
+        pass  # Clear
+
 
 # CSV THAT CONTAINS TOTAL VOLUME AND MEAN FF PATH
 TotalVol_MeanFF_csv = os.path.join(outputPath, totalvol_and_meanff_name)
@@ -329,7 +388,12 @@ imageFilenames = []
 #READ DATA AND PRE PROCESS IT FOR TRAINING DATA SETS:
 i = 0
 #files = files[0:2]
-fat_fraction_means_all_subjects = list()
+fat_fraction_all_subjects = list() #List to then write the .csv file
+volume_all_subjects = list() #List to then write the .csv file
+totalvolume_all_subjects = list()
+meanff_all_subjects = list()
+names_subjects = list()
+
 for fullFilename in files:
     fileSplit = os.path.split(fullFilename) #Divide the path in directory-name
     pathSubject = fileSplit[0]
@@ -339,7 +403,7 @@ for fullFilename in files:
     print(subject) #Flag to check the actual subject
 
     # Output path for this subject:
-    outputPathThisSubject = os.path.join(outputPath, subject)
+    outputPathThisSubject = os.path.join(outputPath, subject) #Generate the path of that subject to save his/her info
     if not os.path.exists(outputPathThisSubject):
         os.makedirs(outputPathThisSubject)
 
@@ -429,10 +493,11 @@ for fullFilename in files:
         transformixImageFilter.Execute()
         output = sitk.Cast(transformixImageFilter.GetResultImage(), sitk.sitkUInt8)
 
-    output_single_mask = output > 0
+    output_single_mask = output > 0 #Binary segmentation
 
     sitk.WriteImage(output, os.path.join(outputPathThisSubject, subject + '_segmentation' + extensionImages), True)
-    sitk.WriteImage(output_single_mask, os.path.join(outputPathThisSubject, subject + '_lumbar_spine_mask' + extensionImages), True)
+    sitk.WriteImage(output_single_mask, os.path.join(outputPathThisSubject, subject + '_lumbar_spine_mask' + extensionImages), True) #The binary segmentation will be called 'subject_lumbar_spine_mask.mhd'
+
     #VOLUME CALCULATION:
 
     # Get the spacial dimensions
@@ -468,8 +533,11 @@ for fullFilename in files:
         # Save the data on the dictionary
         volumes[label] = label_volume
 
+    #Add them to the list
+    volume_all_subjects.append(volumes)
+
     #Write on the .csv
-    write_volumes_to_csv(output_csv_path, volumes, subject)
+    write_volumes_to_csv(output_csv_path, volumes, subject) #Volumen de cada sujeto en la carpeta del sujeto
 
     # Print the volume of all the labels:
     print("\nVolumes:")
@@ -477,9 +545,8 @@ for fullFilename in files:
         print(f"Muscle {label}: {volume} mm³")
 
     #GENERATE FAT FRACTION IMAGE (FF = F/F+W):
-
     # Folder lists of the main directory
-    subdirectories = sorted([d for d in os.listdir(dataPath) if os.path.isdir(os.path.join(dataPath, d))])
+    #subdirectories = sorted([d for d in os.listdir(dataPath) if os.path.isdir(os.path.join(dataPath, d))])
 
     auxName = None
     fat_file = os.path.join(pathSubject, subject + fatSuffix + extensionImages)
@@ -503,7 +570,7 @@ for fullFilename in files:
         #print(f"FF Image saved in: {output_filename}")
     else:
         print(
-            f"Archivo faltante en {folder_path}. Ver que los archivos {folder}_F.mhd y {folder}_W.mhd estén presentes.")
+            f"Archivo faltante en {outputPathThisSubject}. Ver que los archivos {subject}_F.mhd y {subject}_W.mhd estén presentes.")
 
     #FF CALCULATION:
 
@@ -529,10 +596,12 @@ for fullFilename in files:
             fat_fraction_means[label] = np.mean(fat_values)
         else:
             fat_fraction_means[label] = None  # No values for that label
+
     # Add them to the list:
-    fat_fraction_means_all_subjects.append(fat_fraction_means)
+    fat_fraction_all_subjects.append(fat_fraction_means)
+
     # Write on the csv file
-    write_ff_to_csv(output_csv_path, fat_fraction_means, subject)
+    write_ff_to_csv(output_csv_path, fat_fraction_means, subject) #FF de cada sujeto en la carpeta del sujeto
 
     # Print the results
     print("\nFFs:")
@@ -544,12 +613,36 @@ for fullFilename in files:
             print(f"Muscle {label}: Sin valores válidos")
 
     #SAVE THE VOLUME AND FF VALUES FOR EVERY SUBJECT ON THE SAME .CSV FILE:
+
     # VOL & FF .CSV PATH:
     output_csv_path = os.path.join(outputPathThisSubject, 'volumes_and_ffs.csv')
+
     #CSV FOR ALL THE VOLUME AND FF LABELS:
     write_vol_ff_to_csv(output_csv_path, volumes, fat_fraction_means, subject)
 
+    #TOTAL VOLUME:
+    single_array = sitk.GetArrayFromImage(output_single_mask)
+    num_segmented_voxels = np.sum(single_array)
+    total_volume = num_segmented_voxels * voxel_volume #TOTAL VOLUME FOR THAT SUBJECT
 
+    totalvolume_all_subjects.append(total_volume)
+
+    #MEAN FF:
+    # Apply the mask
+    masked_values = fatfraction_array[single_array > 0]
+    # Calculate the mean ff
+    mean_ff = np.mean(masked_values) #MEAN FF FOR THAT SUBJECT
+
+    meanff_all_subjects.append(mean_ff)
+
+    #Name
+    names_subjects.append(subject)
+
+    subject_csv(subject,volumes,fat_fraction_means,total_volume,mean_ff,outputPathThisSubject)
+
+all_subjects_csv(names_subjects, volume_all_subjects, fat_fraction_all_subjects, totalvolume_all_subjects, meanff_all_subjects, general_path)
+
+"""
 #BINARY SEGMENTATIONS:
 #Run the methods that calculate the binary segmentation, calculate the total volume and the mean FF
 volume_results = process_and_save_segmentations(inputSeg, outputBinSeg)
@@ -597,7 +690,7 @@ for _, row in df.iterrows():
     else:
         print(f"The folder for the subject {subject_id} does not exists.")
 
-"""
+
 #GIFS
 #Código para crear GIFS de las segmentaciones
 
