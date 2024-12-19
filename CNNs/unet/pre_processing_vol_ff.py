@@ -250,14 +250,14 @@ def all_subjects_csv(names, list_all_volumes, list_all_ffs, list_total_vol, list
         print(f"Failure to create the csv file: {e}")
 
 # CONFIGURATION:
-device_to_use = 'cpu' #'cpu'
+device_to_use = 'cuda' #'cpu'
 # Needs registration
 preRegistration = True #TRUE: Pre-register using the next image
 registrationReferenceFilename = '../../Data/LumbarSpine3D/ResampledData/C00001.mhd'
 
 #DATA PATHS:
-dataPath = '/home/facundo/data/Nepal/DIXON/' #INPUT FOLDER THAT CONTAINS ALL THE SUBDIRECTORIES
-outputPath = '/home/facundo/data/Nepal/NewSegmentation/' #OUPUT FOLDER TO SAVE THE SEGMENTATIONS
+dataPath = '/home/martin/data_imaging/Muscle/data_sherpas/MHDs/Inputs/'#'/home/martin/data_imaging/Muscle/data_cto5k_cyclists/AllData/RawCompressed/' #INPUT FOLDER THAT CONTAINS ALL THE SUBDIRECTORIES
+outputPath = '/home/martin/data_imaging/Muscle/data_sherpas/MHDs/Outputs//'#'/home/martin/data_imaging/Muscle/data_cto5k_cyclists/AllData/Processed/' #OUPUT FOLDER TO SAVE THE SEGMENTATIONS
 outputResampledPath = outputPath + '/Resampled/' #RESAMPLED SEGMENTATIONS PATH
 #outputBiasCorrectedPath = outputPath + '/BiasFieldCorrection/'
 modelLocation = '../../Data/LumbarSpine3D/PretrainedModel/'
@@ -493,6 +493,9 @@ for fullFilename in files:
         transformixImageFilter.Execute()
         output = sitk.Cast(transformixImageFilter.GetResultImage(), sitk.sitkUInt8)
 
+    # Enforce the same space in the raw image (there was a bug before, without this they match in geometrical space but not in voxel space):
+    output = sitk.Resample(output, sitkImage, sitk.Euler3DTransform(), sitk.sitkNearestNeighbor)
+
     output_single_mask = output > 0 #Binary segmentation
 
     sitk.WriteImage(output, os.path.join(outputPathThisSubject, subject + '_segmentation' + extensionImages), True)
@@ -501,7 +504,7 @@ for fullFilename in files:
     #VOLUME CALCULATION:
 
     # Get the spacial dimensions
-    spacing = sitkImageResampled.GetSpacing()  #Tuple (spacing_x, spacing_y, spacing_z)
+    spacing = sitkImage.GetSpacing()  #Tuple (spacing_x, spacing_y, spacing_z)
     print(spacing)
 
     #Segmentation to array

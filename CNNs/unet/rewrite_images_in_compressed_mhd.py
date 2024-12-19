@@ -14,7 +14,7 @@ USE_COSINES_AND_ORIGIN = 1
 dataTimePoint1Path = '/home/martin/data_imaging/Muscle/data_cto5k_cyclists/AllData/Raw/1stPhase/'
 dataTimePoint2Path = '/home/martin/data_imaging/Muscle/data_cto5k_cyclists/AllData/Raw/2ndPhase/'
 dataPath = '/home/martin/data_imaging/Muscle/data_cto5k_cyclists/AllData/Raw/Reburnt/'# Base data path.
-outputPath = '/home/martin/data_imaging/Muscle/data_cto5k_cyclists/AllData/RawCompressed/'# Base data path.
+outputPath = '/home/martin/data_imaging/Muscle/data_cto5k_cyclists/AllData/RawCompressed2/'# Base data path.
 #dataPath = '/home/martin/data_imaging/Muscle/data_cto5k_cyclists/AllData/Raw/1stPhase/C00011/'# Base data path.
 #outputPath = '/home/martin/data_imaging/Muscle/data_cto5k_cyclists/AllData/RawCompressed/C00011/'# Base data path.
 if not os.path.exists(outputPath):
@@ -31,7 +31,7 @@ extensionShortcuts = 'lnk'
 strForShortcut = '-> '
 extensionImages = '.mhd'
 tagInPhase = ''
-postDflt = 'reburnt'#'reburnt' #''
+postDflt = 'reburnt'#'reburnt'#'reburnt' #''
 postSuffix = 'post'
 t3Suffix = 'T3'
 checkTimePoint1 = False
