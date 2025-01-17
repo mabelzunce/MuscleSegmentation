@@ -60,8 +60,8 @@ preRegistration = True #Si está en TRUE se hace un registro de imagen previo us
 registrationReferenceFilename = '../../Data/LumbarSpine3D/ResampledData/C00001.mhd'
 
 #DATA PATHS:
-dataPath = '/home/facundo/data/Nepal/DIXON/' #PATH DE ENTRADA (Donde tengo las imagenes)
-outputPath = '/home/facundo/data/Nepal/NewSegmentation//' #PATH DE SALIDA (Donde se guardan los resultados)
+dataPath = '/home/martin/data_imaging/Muscle/data_sherpas/MHDs/' #PATH DE ENTRADA (Donde tengo las imagenes)
+outputPath = '/home/martin/data_imaging/Muscle/data_sherpas/Processed/Segmented/' #PATH DE SALIDA (Donde se guardan los resultados)
 outputResampledPath = outputPath + '/Resampled/' #PATH DE SALIDA IMAGENES REMUESTRADAS (tamaño menor)
 modelLocation = '../../Data/LumbarSpine3D/PretrainedModel/' #PATH DEL MODELO
 dataInSubdirPerSubject = True

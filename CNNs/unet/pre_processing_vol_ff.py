@@ -1,6 +1,8 @@
 import SimpleITK as sitk
 import numpy as np
 import os
+
+#from MultiAtlasSegmenter.ImageRegistration.ImageRegistrationOfDixonSegmentedImagesWithLabels import inPhaseImageFilename
 from unet_3d import Unet
 import torch
 from utils import multilabel
@@ -11,6 +13,8 @@ import imageio
 from PIL import Image
 import csv
 import pandas as pd
+import matplotlib.pyplot as plt
+#import imageio.v2 as imageio
 
 #Functions:
 
@@ -249,6 +253,75 @@ def all_subjects_csv(names, list_all_volumes, list_all_ffs, list_total_vol, list
     except Exception as e:
         print(f"Failure to create the csv file: {e}")
 
+
+def create_mri_segmentation_gif(mri, segmentation, output_path, colormap='tab10'):
+    """
+    Creates an animated GIF overlaying segmentation masks on MRI slices.
+
+    Parameters:
+        mri (numpy.ndarray): 3D array of MRI data.
+        segmentation (numpy.ndarray): 3D array of segmentation labels (same size as mri).
+        output_path (str): Path to save the output GIF.
+        colormap (str): Matplotlib colormap for the segmentation labels.
+    """
+    # Check input dimensions
+    assert mri.shape == segmentation.shape, "MRI and segmentation must have the same shape."
+
+    # Normalize MRI for better visualization
+    #mri_normalized = (mri - np.min(mri)) / (np.max(mri) - np.min(mri))
+    mri_normalized = mri / np.max(mri)
+
+    # Create a colormap
+    cmap = plt.get_cmap(colormap)
+
+    # Collect frames for the GIF
+    frames = []
+    for i in range(mri.shape[2]):
+        fig, ax = plt.subplots(figsize=(6, 6))
+        ax.imshow(mri_normalized[:, :, i], cmap='gray', interpolation='none')
+        ax.imshow(segmentation[:, :, i], cmap=cmap, alpha=0.4, interpolation='none')
+        ax.axis('off')
+
+        # Save the frame to a temporary buffer
+        fig.canvas.draw()
+        frame = np.frombuffer(fig.canvas.tostring_rgb(), dtype='uint8')
+        frame = frame.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+        frames.append(frame)
+        plt.close(fig)
+
+    # Write frames to an animated GIF
+    imageio.mimsave(output_path, frames, duration=0.1)  # duration = time per frame in seconds
+    print(f"GIF saved to {output_path}")
+
+def create_segmentation_overlay_animated_gif(sitkImage, sitkLabels, output_path):
+    # Collect frames for the GIF
+    frames = []
+    imageSize = sitkImage.GetSize()
+    sitkImage = sitk.RescaleIntensity(sitkImage, 0, 1)
+    for i in range(imageSize[2]):
+        fig, ax = plt.subplots(figsize=(6, 6))
+        contour_overlaid_image = sitk.LabelMapContourOverlay(
+            sitk.Cast(sitkLabels[:,:,i], sitk.sitkLabelUInt8),
+            sitkImage[:,:,i],
+            opacity=1,
+            contourThickness=[4, 4],
+            dilationRadius=[3, 3]
+        )
+        ax.imshow(sitk.GetArrayFromImage(contour_overlaid_image), interpolation='none')
+        ax.axis('off')
+
+        # Save the frame to a temporary buffer
+        fig.canvas.draw()
+        frame = np.frombuffer(fig.canvas.tostring_rgb(), dtype='uint8')
+        frame = frame.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+        frames.append(frame)
+        plt.close(fig)
+    # Write frames to an animated GIF
+    imageio.mimsave(output_path, frames, duration=0.1)  # duration = time per frame in seconds
+    print(f"GIF saved to {output_path}")
+
+
+
 # CONFIGURATION:
 device_to_use = 'cuda' #'cpu'
 # Needs registration
@@ -256,8 +329,10 @@ preRegistration = True #TRUE: Pre-register using the next image
 registrationReferenceFilename = '../../Data/LumbarSpine3D/ResampledData/C00001.mhd'
 
 #DATA PATHS:
-dataPath = '/home/martin/data_imaging/Muscle/data_sherpas/MHDs/Inputs/'#'/home/martin/data_imaging/Muscle/data_cto5k_cyclists/AllData/RawCompressed/' #INPUT FOLDER THAT CONTAINS ALL THE SUBDIRECTORIES
-outputPath = '/home/martin/data_imaging/Muscle/data_sherpas/MHDs/Outputs//'#'/home/martin/data_imaging/Muscle/data_cto5k_cyclists/AllData/Processed/' #OUPUT FOLDER TO SAVE THE SEGMENTATIONS
+dataPath = '/home/martin/data_imaging/Muscle/data_cto5k_cyclists/AllData/Reprocess/'#'/home/martin/data_imaging/Muscle/data_cto5k_cyclists/AllData/RawCompressed/' #INPUT FOLDER THAT CONTAINS ALL THE SUBDIRECTORIES
+outputPath = '/home/martin/data_imaging/Muscle/data_cto5k_cyclists/AllData/Processed2/' #OUPUT FOLDER TO SAVE THE SEGMENTATIONS
+dataPath = '/home/martin/data_imaging/Muscle/data_sherpas/MHDs/' #PATH DE ENTRADA (Donde tengo las imagenes)
+outputPath = '/home/martin/data_imaging/Muscle/data_sherpas/Processed/Segmented/' #PATH DE SALIDA (Donde se guardan los resultados)
 outputResampledPath = outputPath + '/Resampled/' #RESAMPLED SEGMENTATIONS PATH
 #outputBiasCorrectedPath = outputPath + '/BiasFieldCorrection/'
 modelLocation = '../../Data/LumbarSpine3D/PretrainedModel/'
@@ -407,13 +482,46 @@ for fullFilename in files:
     if not os.path.exists(outputPathThisSubject):
         os.makedirs(outputPathThisSubject)
 
-    #Read the image
-    sitkImage = sitk.ReadImage(fullFilename)
+    ######## READ INPUT IMAGES
+    # Read the in-phase image
+    if os.path.exists(fullFilename):
+        inPhaseImage = sitk.ReadImage(fullFilename)
+    else:
+        inPhaseImage = 0
+    fat_file = os.path.join(pathSubject, subject + fatSuffix + extensionImages)
+    water_file = os.path.join(pathSubject, subject + waterSuffix + extensionImages)
+    # Check if W and F exists and create a fat fraction image:
+    if os.path.exists(fat_file) and os.path.exists(water_file):
+        fatImage = sitk.Cast(sitk.ReadImage(fat_file), sitk.sitkFloat32)
+        waterImage = sitk.Cast(sitk.ReadImage(water_file), sitk.sitkFloat32)
+        # Calculate the FF image and apply the mask on:
+        waterfatImage = sitk.Add(fatImage, waterImage)
+        fatfractionImage = sitk.Divide(fatImage, waterfatImage)
+        fatfractionImage = sitk.Cast(
+            sitk.Mask(fatfractionImage, waterfatImage > 0, outsideValue=0, maskingValue=0),
+            sitk.sitkFloat32)
 
+        # Save the resulting image:
+        output_filename = os.path.join(outputPathThisSubject, subject + '_ff' + extensionImages)
+        sitk.WriteImage(fatfractionImage, output_filename, True)
+        #print(f"FF Image saved in: {output_filename}")
+    else:
+        print(f"Missing W and/or F images for {outputPathThisSubject}.")
+
+
+    # Input image for the segmentation:
+    if inPhaseImage != 0:
+        sitkImage = inPhaseImage
+    else:
+        # use fat image that is similar:
+        sitkImage = fatImage
+
+    # Get the spacial dimensions
+    spacing = sitkImage.GetSpacing()  # Tuple (spacing_x, spacing_y, spacing_z)
+    print(spacing)
     # Apply Bias Field Correction
     shrinkFactor = (4, 4, 2)
     sitkImage = ApplyBiasCorrection(sitkImage, shrinkFactor=shrinkFactor)
-
     # Obtains the name of the file (without the complete path and divide name and extension)
     filename_no_ext, file_extension = os.path.splitext(filename)
 
@@ -503,10 +611,6 @@ for fullFilename in files:
 
     #VOLUME CALCULATION:
 
-    # Get the spacial dimensions
-    spacing = sitkImage.GetSpacing()  #Tuple (spacing_x, spacing_y, spacing_z)
-    print(spacing)
-
     #Segmentation to array
     segmentation_array = sitk.GetArrayFromImage(output)
 
@@ -547,33 +651,11 @@ for fullFilename in files:
     for label, volume in volumes.items():
         print(f"Muscle {label}: {volume} mm³")
 
-    #GENERATE FAT FRACTION IMAGE (FF = F/F+W):
-    # Folder lists of the main directory
-    #subdirectories = sorted([d for d in os.listdir(dataPath) if os.path.isdir(os.path.join(dataPath, d))])
-
-    auxName = None
-    fat_file = os.path.join(pathSubject, subject + fatSuffix + extensionImages)
-    water_file = os.path.join(pathSubject, subject + waterSuffix + extensionImages)
-
-    # Check if the files exists:
-    if os.path.exists(fat_file) and os.path.exists(water_file):
-        fatImage = sitk.Cast(sitk.ReadImage(fat_file), sitk.sitkFloat32)
-        waterImage = sitk.Cast(sitk.ReadImage(water_file), sitk.sitkFloat32)
-
-        # Calculate the FF image and apply the mask on:
-        waterfatImage = sitk.Add(fatImage, waterImage)
-        fatfractionImage = sitk.Divide(fatImage, waterfatImage)
-        fatfractionImage = sitk.Cast(
-            sitk.Mask(fatfractionImage, waterfatImage > 0, outsideValue=0, maskingValue=0),
-            sitk.sitkFloat32)
-
-        # Save the resulting image:
-        output_filename = os.path.join(outputPathThisSubject, subject + '_ff' + extensionImages)
-        sitk.WriteImage(fatfractionImage, output_filename, True)
-        #print(f"FF Image saved in: {output_filename}")
-    else:
-        print(
-            f"Archivo faltante en {outputPathThisSubject}. Ver que los archivos {subject}_F.mhd y {subject}_W.mhd estén presentes.")
+    # WRITE AN ANIMATED GIF WITH THE SEGMENTATION
+#    create_mri_segmentation_gif(np.transpose(sitk.GetArrayFromImage(sitkImage), (1, 2, 0)), np.transpose(segmentation_array, (1, 2, 0)),
+#                               os.path.join(outputPathThisSubject, 'segmentation_check.gif'))
+    #create_segmentation_overlay_animated_gif(sitkImage, output,
+    #                                         os.path.join(outputPathThisSubject, 'segmentation_check.gif'))
 
     #FF CALCULATION:
 
