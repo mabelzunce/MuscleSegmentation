@@ -15,7 +15,7 @@ import csv
 import pandas as pd
 import matplotlib.pyplot as plt
 #import imageio.v2 as imageio
-
+print(np.__version__)
 #Functions:
 
 # BIAS FIELD CORRECTION
@@ -329,14 +329,13 @@ preRegistration = True #TRUE: Pre-register using the next image
 registrationReferenceFilename = '../../Data/LumbarSpine3D/ResampledData/C00001.mhd'
 
 #DATA PATHS:
-dataPath = '/home/martin/data_imaging/Muscle/data_cto5k_cyclists/AllData/ToProcess/'#'/home/martin/data_imaging/Muscle/data_cto5k_cyclists/AllData/RawCompressed/' #INPUT FOLDER THAT CONTAINS ALL THE SUBDIRECTORIES
-outputPath = '/home/martin/data_imaging/Muscle/data_cto5k_cyclists/AllData/Processed_CV5/' #OUPUT FOLDER TO SAVE THE SEGMENTATIONS
-#dataPath = '/home/martin/data_imaging/Muscle/data_sherpas/MHDs/' #PATH DE ENTRADA (Donde tengo las imagenes)
-#outputPath = '/home/martin/data_imaging/Muscle/data_sherpas/Processed/Segmented_CV1/' #PATH DE SALIDA (Donde se guardan los resultados)
+dataPath = '/home/martin/data_imaging/Muscle/data_sarcopenia_tx/cropped/'#'/home/martin/data_imaging/Muscle/data_sherpas/MHDsCompressed/'#'/home/martin/data_imaging/Muscle/data_cto5k_cyclists/AllData/RawCompressed/' #INPUT FOLDER THAT CONTAINS ALL THE SUBDIRECTORIES
+outputPath = '/home/martin/data_imaging/Muscle/data_sarcopenia_tx/cropped_processed/'#'/home/martin/data_imaging/Muscle/data_sherpas/ProcessCropped/' #OUPUT FOLDER TO SAVE THE SEGMENTATIONS
+dataPath = '/home/martin/data_imaging/Muscle/data_sherpas/MHDsCropped/' #PATH DE ENTRADA (Donde tengo las imagenes)
+outputPath = '/home/martin/data_imaging/Muscle/data_sherpas/ProcessedCropped/' #PATH DE SALIDA (Donde se guardan los resultados)
 outputResampledPath = outputPath + '/Resampled/' #RESAMPLED SEGMENTATIONS PATH
 #outputBiasCorrectedPath = outputPath + '/BiasFieldCorrection/'
-modelLocation = '../../Data/LumbarSpine3D/PretrainedModel/'
-modelLocation = '/home/martin/data/Publications/2024_AutomatedSegmentationLumbarSpine/Results/ResultadosModelosCV/Resultados Modelos CV/Modelo 5/Model/'
+modelFilename = '/home/martin/data/UNSAM/Muscle/repoMuscleSegmentation/Data/GlutesPelvis3D/model/unet_20250724_084152_303_best_fit.pt'
 dataInSubdirPerSubject = True
 
 #PATHS FOR THE BINARY SEGMENTATION:
@@ -361,7 +360,7 @@ paramFileAffine = 'Parameters_Affine_' + similarityMetricForReg
 #IMAGE FORMATS AND EXTENSION:
 extensionShortcuts = 'lnk'
 strForShortcut = '-> '
-extensionImages = '.mhd'
+extensionImages = '.mhd'#'.mhd'
 tagInPhase = '_I'#
 # outOfPhaseSuffix
 waterSuffix = '_W'
@@ -410,10 +409,6 @@ if os.path.exists(TotalVol_MeanFF_csv):
     with open(TotalVol_MeanFF_csv, 'w') as file:
         pass  # Clear
 
-# MODEL:
-modelName = os.listdir(modelLocation)[0]
-modelFilename = modelLocation + modelName
-
 #CHECK DEVICE:
 device = torch.device(device_to_use) #'cuda' uses the graphic board
 print(device)
@@ -448,6 +443,9 @@ if dataInSubdirPerSubject: # True: info in subdirectories
             dataInSubdir = os.listdir(dataPath + name)
             for filenameInSubdir in dataInSubdir:
                 nameInSubdir, extension = os.path.splitext(filenameInSubdir)
+                if extension == ".gz":
+                    nameInSubdir, extension2 = os.path.splitext(nameInSubdir)
+                    extension = extension2 + extension
                 if (extension == extensionImages and nameInSubdir.endswith(tagInPhase)
                         and not nameInSubdir.endswith(tagManLabels)):
                     files.append(dataPath + name + os.path.sep + filenameInSubdir)
@@ -475,6 +473,9 @@ for fullFilename in files:
     pathSubject = fileSplit[0]
     filename = fileSplit[1]
     name, extension = os.path.splitext(filename)
+    if extension == ".gz":
+        name, extension2 = os.path.splitext(name)
+        extension = extension2 + extension
     subject = name[:-len(tagInPhase)] #Name of the subject without the tag
     print(subject) #Flag to check the actual subject
 
@@ -525,7 +526,9 @@ for fullFilename in files:
     sitkImage = ApplyBiasCorrection(sitkImage, shrinkFactor=shrinkFactor)
     # Obtains the name of the file (without the complete path and divide name and extension)
     filename_no_ext, file_extension = os.path.splitext(filename)
-
+    if file_extension == ".gz":
+        filename_no_ext, extension2 = os.path.splitext(filename_no_ext)
+        file_extension = extension2 + file_extension
     # Generates the new name with the "_biasFieldCorrection"
     new_filename = f"{filename_no_ext}_biasFieldCorrection{file_extension}"
 

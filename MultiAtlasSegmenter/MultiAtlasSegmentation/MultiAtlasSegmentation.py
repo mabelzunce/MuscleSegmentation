@@ -10,7 +10,7 @@ import SitkImageManipulation as sitkExtra
 import sys
 import os
 import time
-sys.path.append('..\\LabelPropagation\\')
+sys.path.append('../LabelPropagation/')
 import PostprocessingLabels as PP
 import MajorityVoting as MV
 import DixonTissueSegmentation as DixonTissueSeg
@@ -21,7 +21,7 @@ from DynamicLabelFusionWithSimilarityWeights import DynamicLabelFusionWithSimila
 #   - numSelectedAtlases: number of selected atlas after majority voting.
 #   - segmentationType: segmentation type that mainly defines the similarity metric NCC and MRI
 def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath, numLabels = 11, numSelectedAtlases = 5,
-                            parameterFilesPath = 'D:\\Martin\\Segmentation\\Registration\\Elastix\\ParametersFile\\',
+                            parameterFilesPath = '../../Data/Elastix/',
                             paramFileRigid = 'Parameters_Rigid_NCC', paramFileAffine = 'Parameters_Affine_NCC',
                            paramFileBspline = 'NCC_2000_2048', maskedRegistration = False,
                            suffixIntensityImage = '', suffixLabelsImage = '_labels',
@@ -32,7 +32,7 @@ def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath,
     #paramFileRigid = 'Parameters_Rigid_NCC'
     #paramFileAffine = 'Parameters_Affine_NCC'
     # Temp path:
-    tempPath = outputPath + 'temp' + '\\'
+    tempPath = outputPath + 'temp' + '/'
     if not os.path.exists(outputPath):
         os.mkdir(outputPath)
     if not os.path.exists(tempPath):
@@ -63,7 +63,7 @@ def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath,
     if debug:
         sitk.WriteImage(targetImage, outputPath + "input_registration.mhd", True)
         if maskedRegistration:
-            sitk.WriteImage(maskTarget, outputPath + '\\' + 'input_mask' + '.mhd', True)
+            sitk.WriteImage(maskTarget, outputPath + '/' + 'input_mask' + '.mhd', True)
     ############################################
 
     ############# 1) ATLAS LIBRARY ##############################
@@ -164,10 +164,10 @@ def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath,
         print(similarityValue[i])
         # If debugging, write image:
         if debug:
-            outputFilename = outputPath + '\\' + nameMoving + '_to_target' + '.mhd'
+            outputFilename = outputPath + '/' + nameMoving + '_to_target' + '.mhd'
             sitk.WriteImage(registeredImages[i], outputFilename, True)
             if maskedRegistration:
-                outputFilename = outputPath + '\\' + nameMoving + '_mask' + '.mhd'
+                outputFilename = outputPath + '/' + nameMoving + '_mask' + '.mhd'
                 sitk.WriteImage(maskMoving, outputFilename, True)
     ###########################################
 
@@ -212,7 +212,7 @@ def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath,
         propagatedLabels.append(sitk.Cast(transformixImageFilter.GetResultImage(), sitk.sitkUInt8))
         # If debugging, write label image:
         if debug:
-            outputFilename = outputPath + '\\' + nameMoving + '_to_target_labels' + '.mhd'
+            outputFilename = outputPath + '/' + nameMoving + '_to_target_labels' + '.mhd'
             sitk.WriteImage(propagatedLabels[i], outputFilename, True)
     ###############################################
 
@@ -224,12 +224,12 @@ def MultiAtlasSegmentation(targetImage, softTissueMask, libraryPath, outputPath,
     outputLabels = sitk.LabelVoting(selectedLabels, numLabels) # Majority Voting only with the selected atlases.
     # After label voting I will have undecided voxels, add an undecided solving step.
     # This function works only for 3D images:
-    if outputLabels.GetDimension() == 2:
-        outputLabels = sitk.JoinSeries(outputLabels)
-        outputLabels = MV.SetUndecidedVoxelsUsingDistances(outputLabels, numLabels)
-        outputLabels = outputLabels[:,:,0]
-    else:
-        outputLabels = MV.SetUndecidedVoxelsUsingDistances(outputLabels, numLabels)
+    #if outputLabels.GetDimension() == 2:
+    #    outputLabels = sitk.JoinSeries(outputLabels)
+    #    outputLabels = MV.SetUndecidedVoxelsUsingDistances(outputLabels, numLabels)
+    #    outputLabels = outputLabels[:,:,0]
+    #else:
+    #    outputLabels = MV.SetUndecidedVoxelsUsingDistances(outputLabels, numLabels)
     # STAPLES
     multilabelStaple = sitk.MultiLabelSTAPLEImageFilter()
     multilabelStaple.SetTerminationUpdateThreshold(1e-4)

@@ -329,13 +329,14 @@ preRegistration = True #TRUE: Pre-register using the next image
 registrationReferenceFilename = '../../Data/LumbarSpine3D/ResampledData/C00001.mhd'
 
 #DATA PATHS:
-dataPath = '/home/martin/data_imaging/Muscle/data_cto5k_cyclists/AllData/Reprocess/'#'/home/martin/data_imaging/Muscle/data_cto5k_cyclists/AllData/RawCompressed/' #INPUT FOLDER THAT CONTAINS ALL THE SUBDIRECTORIES
-outputPath = '/home/martin/data_imaging/Muscle/data_cto5k_cyclists/AllData/Processed2/' #OUPUT FOLDER TO SAVE THE SEGMENTATIONS
-dataPath = '/home/martin/data_imaging/Muscle/data_sherpas/MHDs/' #PATH DE ENTRADA (Donde tengo las imagenes)
-outputPath = '/home/martin/data_imaging/Muscle/data_sherpas/Processed/Segmented/' #PATH DE SALIDA (Donde se guardan los resultados)
+dataPath = '/home/martin/data_imaging/Muscle/data_cto5k_cyclists/AllData/ToProcess/'#'/home/martin/data_imaging/Muscle/data_cto5k_cyclists/AllData/RawCompressed/' #INPUT FOLDER THAT CONTAINS ALL THE SUBDIRECTORIES
+outputPath = '/home/martin/data_imaging/Muscle/data_cto5k_cyclists/AllData/Processed_CV5/' #OUPUT FOLDER TO SAVE THE SEGMENTATIONS
+#dataPath = '/home/martin/data_imaging/Muscle/data_sherpas/MHDs/' #PATH DE ENTRADA (Donde tengo las imagenes)
+#outputPath = '/home/martin/data_imaging/Muscle/data_sherpas/Processed/Segmented_CV1/' #PATH DE SALIDA (Donde se guardan los resultados)
 outputResampledPath = outputPath + '/Resampled/' #RESAMPLED SEGMENTATIONS PATH
 #outputBiasCorrectedPath = outputPath + '/BiasFieldCorrection/'
 modelLocation = '../../Data/LumbarSpine3D/PretrainedModel/'
+modelLocation = '/home/martin/data/Publications/2024_AutomatedSegmentationLumbarSpine/Results/ResultadosModelosCV/Resultados Modelos CV/Modelo 5/Model/'
 dataInSubdirPerSubject = True
 
 #PATHS FOR THE BINARY SEGMENTATION:
@@ -468,7 +469,7 @@ volume_all_subjects = list() #List to then write the .csv file
 totalvolume_all_subjects = list()
 meanff_all_subjects = list()
 names_subjects = list()
-
+#files = files[76:]
 for fullFilename in files:
     fileSplit = os.path.split(fullFilename) #Divide the path in directory-name
     pathSubject = fileSplit[0]
@@ -545,7 +546,7 @@ for fullFilename in files:
         transform = elastixImageFilter.GetParameterMap()
         sitkImageResampled = elastixImageFilter.GetResultImage() #Result image from the register
         # Write transformed image:
-        sitk.WriteImage(sitkImageResampled, outputResampledPath + name + extensionImages, True)
+        #sitk.WriteImage(sitkImageResampled, outputResampledPath + name + extensionImages, True)
         elastixImageFilter.WriteParameterFile(transform[0], 'transform.txt')
     else:
         sitkImageResampled = sitkImage
@@ -566,7 +567,7 @@ for fullFilename in files:
 
     if preRegistration:
         # Write
-        sitk.WriteImage(output, outputResampledPath + subject + '_resampled_segmentation' + extension, True)
+        #sitk.WriteImage(output, outputResampledPath + subject + '_resampled_segmentation' + extension, True)
 
         # Resample to original space:
         elastixImageFilter = sitk.ElastixImageFilter()

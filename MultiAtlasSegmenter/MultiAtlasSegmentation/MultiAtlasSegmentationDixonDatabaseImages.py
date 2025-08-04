@@ -7,14 +7,14 @@ from MultiAtlasSegmentation import MultiAtlasSegmentation
 from ApplyBiasCorrection import ApplyBiasCorrection
 import SimpleITK as sitk
 import SitkImageManipulation as sitkIm
-import winshell
+#import winshell
 import numpy as np
 import sys
 import os
 import DixonTissueSegmentation
 
 ############################### CONFIGURATION #####################################
-DEBUG = 0 # In debug mode, all the intermediate iamges are written.
+DEBUG = 1 # In debug mode, all the intermediate iamges are written.
 USE_COSINES_AND_ORIGIN = 1
 OVERWRITE_EXISTING_SEGMENTATIONS = 0
 ############################### TARGET FOLDER ###################################
@@ -27,28 +27,28 @@ targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\DixonFovOK\\'
 targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\DixonFovOkTLCCases2020\\'
 targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\ToSegment\\'
 targetPath = 'D:\\Martin\\Data\\MuscleSegmentation\\MuscleStudyHipSpine\\CouchTo5kStudy\\'
-
+targetPath = '/home/martin/data_imaging/Muscle/data_sherpas/MHDsCompressed/'
 # Cases to process, leave it empty to process all the cases in folder:
 casesToSegment = ('C00019', 'C00020', 'C00057', 'C00077')
 casesToSegment = ('C00025')
 casesToSegment = list()
 # Look for the folders or shortcuts:
 files = os.listdir(targetPath)
-files = files[18:]
+#files = files[18:]
 # It can be lnk with shortcuts or folders:
 extensionShortcuts = 'lnk'
 strForShortcut = '-> '
 extensionImages = 'mhd'
 dixonTags = ("_I","_O","_W","_F")
 segmentedImageName = "segmentedImage"
-imagesSubfolder = '\\ForLibrary\\'
+imagesSubfolder = ''#''/ForLibrary/'
 isDixon = True # If it's dixon uses dixon tissue segmenter to create a mask
 
 ############################## MULTI-ATLAS SEGMENTATION PARAMETERS ######################
 libraryVersion = 'V1.3'
 # Library path:
 libraryPath = 'D:\\Martin\\Segmentation\\AtlasLibrary\\' + libraryVersion + '\\NativeResolutionAndSize\\'
-libraryPath = 'D:\\Martin\\Segmentation\\AtlasLibraryLumbarSpine\\'
+libraryPath = '/home/martin/data/RNOH/Segmentation/AtlasLibrary/V1.3/NativeResolutionAndSize/'
 
 # Segmentation type:
 regType = 'Parameters_BSpline_NMI_2000iters_2048samples'
@@ -59,7 +59,7 @@ numberOfSelectedAtlases = 5
 
 ###################### OUTPUT #####################
 # Output path:
-baseOutputPath = 'D:\\MuscleSegmentationEvaluation\\SegmentationWithPython\\CouchTo5k\\LumbarSpine\\' + imagesSubfolder + 'Plugin1.3\\' + libraryVersion + '\\N{0}_N{1}_mask{2}\\'.format(regType, numberOfSelectedAtlases, useMaskInReg)
+baseOutputPath = '/home/martin/data_imaging/Muscle/data_sherpas/multi_atlas_segmentation/' + imagesSubfolder + 'Plugin1.3\\' + libraryVersion + '\\N{0}_N{1}_mask{2}\\'.format(regType, numberOfSelectedAtlases, useMaskInReg)
 if not os.path.exists(baseOutputPath):
     os.makedirs(baseOutputPath)
 
@@ -75,14 +75,14 @@ for filename in files:
             # This is a shortcut:
             shortcut = winshell.shortcut(targetPath + filename)
             indexStart = shortcut.as_string().find(strForShortcut)
-            dataPath = shortcut.as_string()[indexStart+len(strForShortcut):] + '\\'
+            dataPath = shortcut.as_string()[indexStart+len(strForShortcut):] + '/'
         else:
-            dataPath = targetPath + filename + '\\'
+            dataPath = targetPath + filename + '/'
         # Check if the images are available:
         filename = dataPath + imagesSubfolder + name + dixonTags[0] + '.' + extensionImages
         if not OVERWRITE_EXISTING_SEGMENTATIONS:
             # if not overwrite, check if the segmentation is already available:
-            outputFilename = baseOutputPath + name + "\\" + segmentedImageName + "." + extensionImages
+            outputFilename = baseOutputPath + name + "/" + segmentedImageName + "." + extensionImages
             if os.path.exists(filename) and not os.path.exists(outputFilename):
                 # Intensity image:
                 targetImagesNames.append(dataPath + imagesSubfolder + name)
@@ -96,7 +96,7 @@ print("List of files: {0}\n".format(targetImagesNames))
 
 
 # Labels:
-numLabels = 11 # 10 for muscles and bone, and 11 for undecided
+numLabels = 9 # 10 for muscles and bone, and 11 for undecided
 ##########################################################################################
 
 
@@ -130,7 +130,7 @@ for targetFilename in targetImagesNames:
     nameCaseFixed = nameFixed
 
     # Output path:
-    outputPath = baseOutputPath + nameCaseFixed + "\\"
+    outputPath = baseOutputPath + nameCaseFixed + "/"
     if not os.path.exists(outputPath):
         os.mkdir(outputPath)
 
@@ -155,5 +155,5 @@ for targetFilename in targetImagesNames:
     ################ 3) CALL MULTI ATLAS SEGMENTATION #########################
     MultiAtlasSegmentation(fixedImage, softTissueMask, libraryPath, outputPath, DEBUG, numSelectedAtlases=numberOfSelectedAtlases,
                            paramFileBspline = regType, maskedRegistration=useMaskInReg,
-                           suffixIntensityImage = '_I', suffixLabelsImage = '_labels', nameAtlasesToExcludeFromLibrary = [nameCaseFixed])
+                           suffixIntensityImage = '', suffixLabelsImage = '_labels', nameAtlasesToExcludeFromLibrary = [nameCaseFixed])
 

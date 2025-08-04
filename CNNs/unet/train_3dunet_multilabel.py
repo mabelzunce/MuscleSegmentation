@@ -26,12 +26,13 @@ class Augment(enumerate):
 
 DEBUG = False
 AMP = True             # Mixed Precision for larger batches and faster training
-saveMhd = False         # Saves a mhd file for the output
+saveMhd = True         # Saves a mhd file for the output
+saveMhdStep_epochs = 5
 saveDataSetMhd = True  # Saves a Mhd file of the images and labels from dataset
 LoadModel = False      # Pretrained model
 Background = False        # Background is considered as label
 Boxplot = True           # Boxplot created in every best fit
-AugmentedTrainingSet = Augment.NA
+AugmentedTrainingSet = Augment.L
 ############################ DATA PATHS ##############################################
 trainingSetPath = '../../Data/LumbarSpine3D/TrainingSetAugmentedLinear/'
 outputPath = '../../Data/LumbarSpine3D/model/'
@@ -286,9 +287,8 @@ for epoch in range(400):  # loop over the dataset multiple times
     if saveMhd:
         outputTrainingSet = np.zeros(trainingSetShape)
         outputValidSet = np.zeros(validSetShape)
-        if DEBUG:
-            outputTrainingSetProbMaps = np.zeros(np.concatenate(([multilabelNum], trainingSetShape)))
-            outputValidSetProbMaps = np.zeros(np.concatenate(([multilabelNum], validSetShape)))
+        outputTrainingSetProbMaps = np.zeros(np.concatenate(([multilabelNum], trainingSetShape)))
+        outputValidSetProbMaps = np.zeros(np.concatenate(([multilabelNum], validSetShape)))
 
     lossValuesTrainingSetEpoch = []
     lossValuesDevSetEpoch = []
@@ -341,11 +341,10 @@ for epoch in range(400):  # loop over the dataset multiple times
         segmentation = torch.sigmoid(outputs.cpu().to(torch.float32))
         segmentation = maxProb(segmentation.detach().numpy(), multilabelNum)
         segmentation = (segmentation > 0.5) * 1
-        if saveMhd:
-            outputTrainingSet[i*batchSize:(i+1)*batchSize] = multilabel(segmentation, multilabelNum, Background)
-            if DEBUG:
-                outputsNumpy = outputs.cpu().to(torch.float32).detach().numpy()
-                outputTrainingSetProbMaps[:, i * batchSize:(i + 1) * batchSize,:,:] = outputsNumpy.transpose((1,0,2,3))
+        if  saveMhd and ((epoch % saveMhdStep_epochs) == (saveMhdStep_epochs - 1)):
+            outputTrainingSet[i*batchSize:(i+1)*batchSize] = multilabel(segmentation)
+            outputsNumpy = outputs.cpu().to(torch.float32).detach().numpy()
+            outputTrainingSetProbMaps[:, i * batchSize:(i + 1) * batchSize,:,:,:] = outputsNumpy.transpose((1,0,2,3,4))
 
         for k in range(label.shape[0]):
             for j in range(multilabelNum):
@@ -397,12 +396,11 @@ for epoch in range(400):  # loop over the dataset multiple times
         segmentation = torch.sigmoid(outputs.cpu().to(torch.float32))
         segmentation = maxProb(segmentation.detach().numpy(), multilabelNum)
         segmentation = (segmentation > 0.5) * 1
-        if saveMhd:
-            outputValidSet[i * devBatchSize:(i + 1) * devBatchSize] = multilabel(segmentation, multilabelNum, Background)
-            if DEBUG:
-                outputsNumpy = outputs.cpu().to(torch.float32).detach().numpy()
-                outputValidSetProbMaps[:, i * batchSize:(i + 1) * batchSize, :, :] = outputsNumpy.transpose(
-                    (1, 0, 2, 3))
+        if saveMhd and ((epoch % saveMhdStep_epochs) == (saveMhdStep_epochs - 1)):
+            outputValidSet[i * devBatchSize:(i + 1) * devBatchSize] = multilabel(segmentation)
+            outputsNumpy = outputs.cpu().to(torch.float32).detach().numpy()
+            outputValidSetProbMaps[:, i * batchSize:(i + 1) * batchSize, :, :, :] = outputsNumpy.transpose(
+                (1, 0, 2, 3, 4))
 
         for k in range(label.shape[0]):
             for j in range(multilabelNum):
@@ -450,6 +448,14 @@ for epoch in range(400):  # loop over the dataset multiple times
                 plt.legend()
             plt.savefig(outputPath + 'model_training_Dice_' + labelNames[k] + '.png')
             plt.close()
+    if saveMhd and ((epoch % saveMhdStep_epochs) == (saveMhdStep_epochs - 1)):
+        writeMhd(outputTrainingSet.astype(np.uint8), outputPath + 'outputTrainingSet.mhd', 0)
+        writeMhd(outputValidSet.astype(np.uint8), outputPath + 'outputValidSet.mhd', 0)
+        #for j in range(0, multilabelNum):
+        #    writeMhd(outputTrainingSetProbMaps[j, :, :, :].squeeze(),
+        #             outputPath + 'outputTrainingSetProbMaps_label{0}_epoch{1}.mhd'.format(j, epoch), 0)
+        #    writeMhd(outputValidSetProbMaps[j, :, :, :].squeeze(),
+        #             outputPath + 'outputValidSetProbMaps_label{0}_epoch{1}.mhd'.format(j, epoch), 0)
 
     if (avg_vloss < best_vloss) and (epoch >= skip_model):
         best_vloss = avg_vloss
@@ -468,17 +474,14 @@ for epoch in range(400):  # loop over the dataset multiple times
                 boxplot(data=(diceTraining[k], diceValid[k]),
                         xlabel=['Training Set', 'Valid Set'], outpath=(outputPath + labelNames[k] + '_boxplot.png'),
                         yscale=[0.7, 1.0], title=labelNames[k]+'Dice Scores')
-        if saveMhd:
-            writeMhd(outputTrainingSet.astype(np.uint8), outputPath + 'outputTrainingSet.mhd', True)
-            writeMhd(outputValidSet.astype(np.uint8), outputPath + 'outputValidSet.mhd', True)
-            if DEBUG:
-                for j in range(0, multilabelNum):
-                    writeMhd(outputTrainingSetProbMaps[j, :, :, :].squeeze(),
-                             outputPath + 'outputTrainingSetProbMaps_label{0}_epoch{1}.mhd'.format(j, epoch), True)
-                    writeMhd(outputValidSetProbMaps[j, :, :, :].squeeze(),
-                             outputPath + 'outputValidSetProbMaps_label{0}_epoch{1}.mhd'.format(j, epoch), True)
+
 
 
 print('Finished Training')
 torch.save(unet.state_dict(), outputPath + 'unet.pt')
 torch.save(unet, outputPath + 'unetFullModel.pt')
+
+writeMhd(outputTrainingSetProbMaps[j, :, :, :].squeeze(),
+        outputPath + 'outputTrainingSetProbMaps_label{0}_epoch{1}.mhd'.format(j, epoch), 0)
+writeMhd(outputValidSetProbMaps[j, :, :, :].squeeze(),
+        outputPath + 'outputValidSetProbMaps_label{0}_epoch{1}.mhd'.format(j, epoch), 0)
