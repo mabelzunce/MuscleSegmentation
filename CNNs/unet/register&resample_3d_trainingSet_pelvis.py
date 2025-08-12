@@ -21,13 +21,13 @@ paramFileAffine = 'Parameters_Affine_' + similarityMetricForReg
 
 dataPath = '../../Data/LumbarSpine3D/RawData/' # Base data path.
 outputPath = '../../Data/LumbarSpine3D/Regstered&ResampledData/' # Base data path.
-dataPath = "/home/martin/data_imaging/Muscle/LumbarSpine/ManualSegmentations/MhdCompressed/"
-outputPath = "/home/martin/data_imaging/Muscle/LumbarSpine/ManualSegmentations/MhdRegisteredDownsampled/"
+dataPath = "/home/martin/data_imaging/Muscle/GlutealSegmentations/PelvisFOV/ManualSegmentations/MhdCompressed/"
+outputPath = "/home/martin/data_imaging/Muscle/GlutealSegmentations/PelvisFOV/ManualSegmentations/MhdRegisteredDownsampled/"
 if not os.path.exists(outputPath):
     os.makedirs(outputPath)
 
 # Reference image for the registration
-referenceImageFilename = 'C00141.mhd'
+referenceImageFilename = 'ID00002.mhd'
 
 # Get the atlases names and files:
 # Look for the folders or shortcuts:

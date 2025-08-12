@@ -3,6 +3,7 @@ import SimpleITK
 import SimpleITK as sitk
 import matplotlib.pyplot as plt
 import numpy as np
+from utils import writeMhd
 import os
 from utils import swap_labels
 #import winshell
@@ -22,6 +23,9 @@ if not os.path.exists(outputPath):
     os.makedirs(outputPath)
 if not os.path.exists(croppedPath):
     os.makedirs(croppedPath)
+
+# Save the training set:
+saveDataSetMhd = True
 # Get the atlases names and files:
 # Look for the folders or shortcuts:
 data = os.listdir(dataPath)
@@ -97,6 +101,30 @@ if cropImages:
 
         sitk.WriteImage(image, croppedPath + atlasNames[i] + 'cropped' + '.' + extensionImages, True)
         sitk.WriteImage(label,  croppedPath + atlasNames[i] + 'cropped' + tagManLabels + '.' + extensionImages, True)
+
+# Write the input data set in a single file:
+if saveDataSetMhd:
+    for i in range(0, len(atlasNames)):
+        image = sitk.ReadImage(atlasImageFilenames[i])
+        label = sitk.ReadImage(atlasLabelsFilenames[i])
+        if i == 0:
+            datasetShape = [len(atlasNames), image.GetSize()[2], image.GetSize()[1], image.GetSize()[0]]
+            imagesDataset = np.zeros(datasetShape)
+            labelsDataset = np.zeros(datasetShape)
+            # Size of each 2d image:
+            dataSetImageSize_voxels = imagesDataset.shape[1:4]  # obtiene el getsize[1 y 0]
+
+        imagesDataset[i, :, :, :] = np.reshape(sitk.GetArrayFromImage(image),
+                                                       [1, image.GetSize()[2], image.GetSize()[1],
+                                                        image.GetSize()[0]])
+        labelsDataset[i, :, :, :] = np.reshape(sitk.GetArrayFromImage(label),
+                                               [1, label.GetSize()[2], label.GetSize()[1],
+                                                label.GetSize()[0]])
+
+    stackedSizeTraining = (imagesDataset.shape[0]*dataSetImageSize_voxels[0], dataSetImageSize_voxels[1], dataSetImageSize_voxels[2])
+    writeMhd(np.reshape(imagesDataset, stackedSizeTraining).astype(np.float32), outputPath + 'images_input_dataset.mhd')
+    writeMhd(np.reshape(labelsDataset, stackedSizeTraining).astype(np.uint8), outputPath + 'labels_input_dataset.mhd')
+
 
 for i in range(0, len(atlasNames)):
 

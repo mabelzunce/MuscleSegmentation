@@ -15,7 +15,7 @@ import csv
 import pandas as pd
 import matplotlib.pyplot as plt
 #import imageio.v2 as imageio
-print(np.__version__)
+
 #Functions:
 
 # BIAS FIELD CORRECTION
@@ -326,17 +326,16 @@ def create_segmentation_overlay_animated_gif(sitkImage, sitkLabels, output_path)
 device_to_use = 'cuda' #'cpu'
 # Needs registration
 preRegistration = True #TRUE: Pre-register using the next image
-# REFERENCE IMAGE FOR THE PRE PROCESSING REGISTRATION:
-referenceImageFilename = '/home/martin/data_imaging/Muscle/GlutealSegmentations/PelvisFOV/ManualSegmentations/MhdRegisteredDownsampled/ID00002.mhd'
+registrationReferenceFilename = '../../Data/LumbarSpine3D/ResampledData/C00001.mhd'
 
 #DATA PATHS:
-dataPath = '/home/martin/data_imaging/Muscle/data_sarcopenia_tx/nifti_pelvis/'#'/home/martin/data_imaging/Muscle/data_sherpas/MHDsCompressed/'#'/home/martin/data_imaging/Muscle/data_cto5k_cyclists/AllData/RawCompressed/' #INPUT FOLDER THAT CONTAINS ALL THE SUBDIRECTORIES
-outputPath = '/home/martin/data_imaging/Muscle/data_sarcopenia_tx/nifti_pelvis/'#'/home/martin/data_imaging/Muscle/data_sherpas/ProcessCropped/' #OUPUT FOLDER TO SAVE THE SEGMENTATIONS
-#dataPath = '/home/martin/data_imaging/Muscle/data_sherpas/MHDsCropped/' #PATH DE ENTRADA (Donde tengo las imagenes)
-#outputPath = '/home/martin/data_imaging/Muscle/data_sherpas/ProcessedCropped/' #PATH DE SALIDA (Donde se guardan los resultados)
-
+dataPath = '/home/martin/data_imaging/Muscle/data_sherpas/MHDsCompressed/'#'/home/martin/data_imaging/Muscle/data_cto5k_cyclists/AllData/RawCompressed/' #INPUT FOLDER THAT CONTAINS ALL THE SUBDIRECTORIES
+outputPath = '/home/martin/data_imaging/Muscle/data_sherpas/LumbarSpineProcessed/' #OUPUT FOLDER TO SAVE THE SEGMENTATIONS
+dataPath = '/home/martin/data_imaging/Muscle/data_sarcopenia_tx/nifti_lumbar/' #PATH DE ENTRADA (Donde tengo las imagenes)
+outputPath = '/home/martin/data_imaging/Muscle/data_sarcopenia_tx/nifti_lumbar/' #PATH DE SALIDA (Donde se guardan los resultados)
 #outputBiasCorrectedPath = outputPath + '/BiasFieldCorrection/'
-modelFilename = '/home/martin/data/UNSAM/Muscle/repoMuscleSegmentation/Data/GlutesPelvis3D/model/unet_20250807_110716_123_best_fit.pt'
+modelLocation = '../../Data/LumbarSpine3D/PretrainedModel/'
+#modelLocation = '/home/martin/data/Publications/2024_AutomatedSegmentationLumbarSpine/Results/ResultadosModelosCV/Resultados Modelos CV/Modelo 5/Model/'
 dataInSubdirPerSubject = True
 
 #PATHS FOR THE BINARY SEGMENTATION:
@@ -347,6 +346,10 @@ inputSeg = outputPath
 outputBinSeg = outputPath
 #Folder that contains the binary segmentation and 'ff' images
 binarySegAndFFPath = outputPath
+
+# REFERENCE IMAGE FOR THE PRE PROCESSING REGISTRATION:
+referenceImageFilename = '../../Data/LumbarSpine3D/ResampledData/C00001.mhd'
+referenceImage = sitk.ReadImage(referenceImageFilename)
 
 # REGISTRATION PARAMETER FILES:
 similarityMetricForReg = 'NMI' #NMI Metric
@@ -368,7 +371,6 @@ tagManLabels = '_labels'
 # OUTPUT PATHS:
 if not os.path.exists(outputPath):
     os.makedirs(outputPath)
-
 
 vol_csv_name = 'volumes.csv'
 ff_csv_name = 'ffs.csv'
@@ -404,6 +406,10 @@ if os.path.exists(TotalVol_MeanFF_csv):
     with open(TotalVol_MeanFF_csv, 'w') as file:
         pass  # Clear
 
+# MODEL:
+modelName = os.listdir(modelLocation)[0]
+modelFilename = modelLocation + modelName
+
 #CHECK DEVICE:
 device = torch.device(device_to_use) #'cuda' uses the graphic board
 print(device)
@@ -422,12 +428,10 @@ model.load_state_dict(torch.load(modelFilename, map_location=device))
 model = model.to(device)
 
 #READ DATA AND PRE PROCESS IT FOR TRAINING DATA SETS:
-if preRegistration:
-    referenceImage = sitk.ReadImage(referenceImageFilename)
-    # Parameters for image registration:
-    parameterMapVector = sitk.VectorOfParameterMap()
-    parameterMapVector.append(sitk.ElastixImageFilter().ReadParameterFile(parameterFilesPath + paramFileRigid + '.txt'))
-    print('Reference image voxel size: {0}'.format(referenceImage.GetSize()))
+# Parameters for image registration:
+parameterMapVector = sitk.VectorOfParameterMap()
+parameterMapVector.append(sitk.ElastixImageFilter().ReadParameterFile(parameterFilesPath + paramFileRigid + '.txt'))
+print('Reference image voxel size: {0}'.format(referenceImage.GetSize()))
 
 # LOOK FOR THE FOLDERS OF THE IN-PHASE IMAGES:
 #files = os.listdir(dataPath)
@@ -449,7 +453,8 @@ if dataInSubdirPerSubject: # True: info in subdirectories
 else:
     files = [fn for fn in os.listdir(dataPath)
               if fn.endswith(tagInPhase + extensionImages) and not fn.endswith(tagManLabels + extensionImages)]
-
+if preRegistration:
+    refImage = sitk.ReadImage(registrationReferenceFilename)
 
 #files = sorted(files)
 imageNames = []
@@ -463,7 +468,7 @@ volume_all_subjects = list() #List to then write the .csv file
 totalvolume_all_subjects = list()
 meanff_all_subjects = list()
 names_subjects = list()
-#files = files[7:8]
+#files = files[31:]
 for fullFilename in files:
     fileSplit = os.path.split(fullFilename) #Divide the path in directory-name
     pathSubject = fileSplit[0]
@@ -525,6 +530,7 @@ for fullFilename in files:
     if file_extension == ".gz":
         filename_no_ext, extension2 = os.path.splitext(filename_no_ext)
         file_extension = extension2 + file_extension
+
     # Generates the new name with the "_biasFieldCorrection"
     new_filename = f"{filename_no_ext}_biasFieldCorrection{file_extension}"
 
@@ -544,6 +550,7 @@ for fullFilename in files:
         elastixImageFilter.Execute()
         transform = elastixImageFilter.GetParameterMap()
         sitkImageResampled = elastixImageFilter.GetResultImage() #Result image from the register
+        # Write transformed image:
         elastixImageFilter.WriteParameterFile(transform[0], 'transform.txt')
     else:
         sitkImageResampled = sitkImage
@@ -649,8 +656,8 @@ for fullFilename in files:
     # WRITE AN ANIMATED GIF WITH THE SEGMENTATION
 #    create_mri_segmentation_gif(np.transpose(sitk.GetArrayFromImage(sitkImage), (1, 2, 0)), np.transpose(segmentation_array, (1, 2, 0)),
 #                               os.path.join(outputPathThisSubject, 'segmentation_check.gif'))
-#    create_segmentation_overlay_animated_gif(sitkImage, output,
-#                                             os.path.join(outputPathThisSubject, 'segmentation_check.gif'))
+    #create_segmentation_overlay_animated_gif(sitkImage, output,
+    #                                         os.path.join(outputPathThisSubject, 'segmentation_check.gif'))
 
     #FF CALCULATION:
 
